@@ -1,0 +1,5 @@
+# requirements.txt
+
+langchain==0.0.13
+openai==0.27.0
+streamlit==1.12.1
