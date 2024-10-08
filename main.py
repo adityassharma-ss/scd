@@ -1,32 +1,56 @@
-from src.model.ai_model import AIModel
+from src.output.scd_generator import SCDGenerator
 from src.data.io_handler import IOHandler
+from src.cost.cost_estimator import CostEstimator
+import argparse
 
-class SCDGenerator:
-    def __init__(self):
-        self.ai_model = AIModel()
+def main():
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description="Generate SCD using GenAI with system and user prompts")
+    parser.add_argument("--input", help="Path to input CSV file", required=True)
+    parser.add_argument("--output", help="Path to output Markdown file", required=True)
+    parser.add_argument("--model", help="OpenAI Model to use (GPT-4 or GPT-3.5)", default="gpt-4")
+    
+    args = parser.parse_args()
 
-    def generate_scds(self, cloud, service, control_name, description):
-        """Generate security control definitions for the entire dataset."""
-        try:
-            scd_output = self.ai_model.generate_scd(cloud, service, control_name, description)
-            return scd_output
-        except Exception as e:
-            print(f"Error in SCD generation: {e}")
-            return None
+    # Load CSV data
+    data = IOHandler.load_csv(args.input)
 
-    def process_scd(self, input_file_path, output_file_path):
-        """Processing method: load input, generate SCDs, save output"""
-        try:
-            data = IOHandler.load_csv(input_file_path)
-            scd_outputs = []
-            for _, row in data.iterrows():
-                scd_output = self.generate_scds(row['Cloud'], row['Service'], row['Control Name'], row['Description'])
-                scd_outputs.append({
-                    'cloud': row['Cloud'],
-                    'service': row['Service'],
-                    'control_name': row['Control Name'],
-                    'scd_output': scd_output
-                })
-            IOHandler.save_output(scd_outputs, output_file_path)
-        except Exception as e:
-            print(f"Error processing SCD: {e}")
+    # Initialize SCD Generator
+    scd_generator = SCDGenerator()
+
+    # Display available cloud services and control names to the user
+    print("Select the SCD you want to generate:")
+    for idx, row in data.iterrows():
+        print(f"{idx + 1}. Cloud: {row['Cloud']}, Service: {row['Service']}, Control: {row['Control Name']}")
+
+    # Ask for user input to select the service/control
+    try:
+        choice = int(input("\nEnter the number corresponding to the service/control for SCD generation: ")) - 1
+        if choice < 0 or choice >= len(data):
+            print("Invalid selection. Please select a valid choice.")
+            return
+        
+        # Retrieve the specific row based on user choice
+        selected_row = data.iloc[choice]
+
+        # Generate SCD for the selected row
+        scd_output = scd_generator.generate_scds(
+            selected_row["Cloud"], selected_row["Service"], selected_row["Control Name"], selected_row["Description"]
+        )
+
+        # Save output to the Markdown file
+        output_data = [{
+            'cloud': selected_row["Cloud"],
+            'service': selected_row["Service"],
+            'control_name': selected_row["Control Name"],
+            'scd_output': scd_output
+        }]
+        IOHandler.save_output(output_data, args.output)
+
+        print(f"\nSCD for {selected_row['Service']} has been generated and saved to {args.output}")
+
+    except ValueError:
+        print("Invalid input. Please enter a valid number.")
+
+if __name__ == "__main__":
+    main()
