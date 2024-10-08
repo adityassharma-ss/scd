@@ -1,56 +1,38 @@
-from src.output.scd_generator import SCDGenerator
-from src.data.io_handler import IOHandler
-from src.cost.cost_estimator import CostEstimator
-import argparse
+import time
+from langchain_openai import OpenAI
+from src.utils.config import Config
 
-def main():
-    # Parse command line arguments
-    parser = argparse.ArgumentParser(description="Generate SCD using GenAI with system and user prompts")
-    parser.add_argument("--input", help="Path to input CSV file", required=True)
-    parser.add_argument("--output", help="Path to output Markdown file", required=True)
-    parser.add_argument("--model", help="OpenAI Model to use (GPT-4 or GPT-3.5)", default="gpt-4")
-    
-    args = parser.parse_args()
+class AIModel:
+    def __init__(self):
+        self.model = OpenAI(api_key=Config().get_openai_api_key(), temperature=0.7)
 
-    # Load CSV data
-    data = IOHandler.load_csv(args.input)
-
-    # Initialize SCD Generator
-    scd_generator = SCDGenerator()
-
-    # Display available cloud services and control names to the user
-    print("Select the SCD you want to generate:")
-    for idx, row in data.iterrows():
-        print(f"{idx + 1}. Cloud: {row['Cloud']}, Service: {row['Service']}, Control: {row['Control Name']}")
-
-    # Ask for user input to select the service/control
-    try:
-        choice = int(input("\nEnter the number corresponding to the service/control for SCD generation: ")) - 1
-        if choice < 0 or choice >= len(data):
-            print("Invalid selection. Please select a valid choice.")
-            return
-        
-        # Retrieve the specific row based on user choice
-        selected_row = data.iloc[choice]
-
-        # Generate SCD for the selected row
-        scd_output = scd_generator.generate_scds(
-            selected_row["Cloud"], selected_row["Service"], selected_row["Control Name"], selected_row["Description"]
+    def generate_scd(self, cloud, service, control_name, description, max_retries=3, retry_delay=5):
+        """Generate a security control definition using AI model with retry on failure."""
+        prompt = (
+            f"You are a cloud security expert. Generate a detailed security control definition for the following: \n\n"
+            f"Cloud: {cloud}\n"
+            f"Service: {service}\n"
+            f"Control Name: {control_name}\n"
+            f"Description: {description}\n\n"
+            f"Include: \n"
+            f"Implementation Details\n"
+            f"- Responsibilities (cloud provider/customer)\n"
+            f"- Audit frequency\n"
+            f"Evidence Required\n"
+            f"Additional Details\n"
         )
 
-        # Save output to the Markdown file
-        output_data = [{
-            'cloud': selected_row["Cloud"],
-            'service': selected_row["Service"],
-            'control_name': selected_row["Control Name"],
-            'scd_output': scd_output
-        }]
-        IOHandler.save_output(output_data, args.output)
-
-        print(f"\nSCD for {selected_row['Service']} has been generated and saved to {args.output}")
-
-    except ValueError:
-        print("Invalid input. Please enter a valid number.")
-
-if __name__ == "__main__":
-    main()
+        retries = 0
+        while retries < max_retries:
+            try:
+                response = self.model.invoke(prompt)
+                return response.strip()
+            except Exception as e:
+                if "503" in str(e):
+                    print(f"Error generating SCD: {e}. Retrying {retries + 1}/{max_retries} in {retry_delay} seconds...")
+                    retries += 1
+                    time.sleep(retry_delay)
+                else:
+                    raise Exception(f"Error generating SCD: {e}")
+        
+        raise Exception("Failed to generate SCD after maximum retries.")
