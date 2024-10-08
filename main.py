@@ -1,29 +1,32 @@
-from langchain_openai import OpenAI
-from src.utils.config import Config
+from src.model.ai_model import AIModel
+from src.data.io_handler import IOHandler
 
-class AIModel:
+class SCDGenerator:
     def __init__(self):
-        self.model = OpenAI(api_key=Config().get_openai_api_key(), temperature=0.7)
+        self.ai_model = AIModel()
 
-    def generate_scd(self, cloud, service, control_name, description):
-        """Generate a security control definition using AI model"""
-        prompt = (
-            f"You are a cloud security expert. Generate a detailed security control definition for the following:\n\n"
-            f"Cloud: {cloud}\n"
-            f"Service: {service}\n"
-            f"Control Name: {control_name}\n"
-            f"Description: {description}\n\n"
-            f"Include:\n"
-            f"- Implementation Details\n"
-            f"- Responsibilities (cloud provider/customer)\n"
-            f"- Audit frequency\n"
-            f"- Evidence Required\n"
-            f"- Additional Details\n"
-        )
-
+    def generate_scds(self, cloud, service, control_name, description):
+        """Generate security control definitions for the entire dataset."""
         try:
-            response = self.model.invoke(prompt)
-            return response.strip()
+            scd_output = self.ai_model.generate_scd(cloud, service, control_name, description)
+            return scd_output
         except Exception as e:
-            print(f"Error generating SCD: {e}")
-            return "Error generating SCD"
+            print(f"Error in SCD generation: {e}")
+            return None
+
+    def process_scd(self, input_file_path, output_file_path):
+        """Processing method: load input, generate SCDs, save output"""
+        try:
+            data = IOHandler.load_csv(input_file_path)
+            scd_outputs = []
+            for _, row in data.iterrows():
+                scd_output = self.generate_scds(row['Cloud'], row['Service'], row['Control Name'], row['Description'])
+                scd_outputs.append({
+                    'cloud': row['Cloud'],
+                    'service': row['Service'],
+                    'control_name': row['Control Name'],
+                    'scd_output': scd_output
+                })
+            IOHandler.save_output(scd_outputs, output_file_path)
+        except Exception as e:
+            print(f"Error processing SCD: {e}")
