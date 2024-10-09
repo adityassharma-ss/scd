@@ -1,38 +1,39 @@
-from src.model.ai_model import AIModel
+import streamlit as st
+from src.output.scd_generator import SCDGenerator
 from src.data.io_handler import IOHandler
+import tempfile
 
-class SCDGenerator:
-    def __init__(self):
-        self.ai_model = AIModel()
+def main():
+    st.title("Cloud Security Control Definition Generator")
 
-    def generate_scds(self, cloud_service, control_id, control_description, config_rule, guidance):
-        """Generate security control definitions for a specific control."""
-        try:
-            scd_output = self.ai_model.generate_scd(cloud_service, control_id, control_description, config_rule, guidance)
-            return scd_output
-        except Exception as e:
-            print(f"Error in SCD generation: {e}")
-            return None
+    # Upload CSV file
+    uploaded_file = st.file_uploader("Upload the dataset (CSV)", type=["csv"])
+    
+    if uploaded_file is not None:
+        # Create a temporary file to save the uploaded dataset
+        temp_input_file = tempfile.NamedTemporaryFile(delete=False)
+        temp_input_file.write(uploaded_file.getvalue())
+        temp_input_file.close()
 
-    def process_scd(self, input_file_path, output_file_path, user_prompt):
-        """Process method: load input, generate SCDs based on user prompt, save output."""
-        try:
-            data = IOHandler.load_csv(input_file_path)
-            scd_outputs = []
+        # Load the dataset
+        data = IOHandler.load_csv(temp_input_file.name)
+        st.write("Dataset loaded successfully:")
+        st.dataframe(data)
 
-            # Filter dataset based on user prompt
-            filtered_data = data[data['Control Description'].str.contains(user_prompt, case=False)]
+        # Input prompt from user
+        user_prompt = st.text_input("Enter a prompt for SCD generation (e.g., 'S3 bucket')")
 
-            for index, row in filtered_data.iterrows():
-                scd_output = self.generate_scds(row['Cloud Service'], row['Control ID'], row['Control Description'], row['Config Rule'], row['Guidance'])
-                scd_outputs.append({
-                    'cloud_service': row['Cloud Service'],
-                    'control_id': row['Control ID'],
-                    'control_description': row['Control Description'],
-                    'scd_output': scd_output
-                })
+        # Output file name
+        output_file_path = st.text_input("Enter the output file name", "output_scd_report.md")
 
-            IOHandler.save_output(scd_outputs, output_file_path)
+        # Generate button
+        if st.button("Generate SCD"):
+            scd_generator = SCDGenerator()
 
-        except Exception as e:
-            print(f"Error processing SCD: {e}")
+            # Process SCDs and use temp_input_file.name for input file path
+            scd_generator.process_scd(temp_input_file.name, output_file_path, user_prompt)
+
+            st.success(f"SCD report generated and saved to {output_file_path}")
+
+if __name__ == "__main__":
+    main()
