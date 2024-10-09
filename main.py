@@ -8,31 +8,31 @@ class SCDGenerator:
         # Initialize the output data list
         output_data = []
 
+        # Debugging: Print the incoming prompt and dataset
+        print(f"User Prompt: {control_request}")
+        print("Dataset Preview:")
+        print(df.head())  # Print the first few rows of the dataset for inspection
+
         # Analyzing user prompt and filtering dataset accordingly
         for index, row in df.iterrows():
-            # Analyze the prompt for keywords (you can refine this based on your requirements)
-            if control_request.lower() in row.get('Control Name', '').lower() or \
-               control_request.lower() in row.get('Description', '').lower():
-                
-                control_name = row.get('Control Name', f"Control for {index + 1}")
-                description = row.get('Description', f"Description for control {index + 1}")
-                implementation_details = row.get('Implementation Details', "Implement according to best practices.")
-                responsibility = row.get('Responsibility', "Customer")
-                frequency = row.get('Frequency', "Continuous")
+            # Check if the prompt is in the Control Name or Description
+            control_name = row.get('Control Name', '').lower()
+            description = row.get('Description', '').lower()
+            prompt_lower = control_request.lower()
 
-                # Generate Control ID based on the index or specific logic
+            if prompt_lower in control_name or prompt_lower in description:
                 control_id = f"CTRL-{index + 1:03}"
-
-                # Add the generated control details to the output data
                 output_data.append([
                     control_id,
-                    control_name,
-                    description,
-                    implementation_details,
-                    responsibility,
-                    frequency,
-                    "Evidence required."  # This could also be dynamic if needed
+                    row.get('Control Name', f"Control for {index + 1}"),
+                    row.get('Description', f"Description for control {index + 1}"),
+                    row.get('Implementation Details', "Implement according to best practices."),
+                    row.get('Responsibility', "Customer"),
+                    row.get('Frequency', "Continuous"),
+                    "Evidence required."
                 ])
+                # Debugging: Print the matched control information
+                print(f"Matched Control: {control_id}, {row.get('Control Name')}")
 
         # Create a DataFrame from the output data
         output_df = pd.DataFrame(output_data, columns=[
@@ -47,5 +47,9 @@ class SCDGenerator:
 
         # Write the output DataFrame to a CSV file
         output_df.to_csv(output_file_path, index=False)
+
+        # Debugging: Check the output DataFrame
+        print("Output DataFrame:")
+        print(output_df)
 
         return output_df  # Return the DataFrame if needed for further processing
