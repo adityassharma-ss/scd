@@ -11,42 +11,42 @@ class SCDGenerator:
 
         # Initialize the output data list
         output_data = []
-        
+
         # Debugging: Print the incoming prompt and dataset
         print(f"User Prompt: {control_request}")
         print("Dataset Preview:")
         print(df.head())  # Print the first few rows of the dataset for inspection
 
-        # Check for expected columns in the dataset
-        expected_columns = ['Control ID', 'Control Description', 'Guidance', 'Cloud Service']
-        for col in expected_columns:
-            if col not in df.columns:
-                print(f"Warning: Missing expected column '{col}' in the dataset.")
-                return None
+        # Clean up the dataset: strip whitespace and lower case for easier matching
+        df.columns = df.columns.str.strip().str.lower()
+        df['control description'] = df['control description'].str.strip().str.lower()
+        df['guidance'] = df['guidance'].str.strip().str.lower()
+
+        # Convert control request to lower case for matching
+        prompt_lower = control_request.lower()
 
         # Analyzing user prompt and filtering dataset accordingly
         for index, row in df.iterrows():
-            # Check if the prompt is in the Control Description or Guidance
-            control_description = row.get('Control Description', '').lower()
-            guidance = row.get('Guidance', '').lower()
-            prompt_lower = control_request.lower()
+            control_description = row.get('control description', '')
+            guidance = row.get('guidance', '')
 
+            # Check if the prompt matches either the Control Description or Guidance
             if prompt_lower in control_description or prompt_lower in guidance:
-                control_id = row.get('Control ID', f"CTRL-{index + 1:03d}")
+                control_id = row.get('control id', f"CTRL-{index + 1:03d}")
 
                 # Generate the detailed security control definition using AI model
                 ai_response = self.ai_model.generate_scd(
-                    cloud=row.get('Cloud Service', 'Unknown'),
-                    service=row.get('Config Rule', 'Unknown'),  # Assuming Config Rule relates to service
-                    control_name=row.get('Control Description', 'Unknown'),
-                    description=row.get('Guidance', 'Unknown')
+                    cloud=row.get('cloud service', 'Unknown'),
+                    service=row.get('config rule', 'Unknown'),  # Assuming Config Rule relates to service
+                    control_name=row.get('control description', 'Unknown'),
+                    description=row.get('guidance', 'Unknown')
                 )
 
                 # Append to output data
                 output_data.append([
                     control_id,
-                    row.get('Control Description', f"Control for {index + 1}"),
-                    row.get('Guidance', f"Description for control {index + 1}"),
+                    row.get('control description', f"Control for {index + 1}"),
+                    row.get('guidance', f"Description for control {index + 1}"),
                     ai_response if ai_response else "No response generated",
                     "Customer",  # Assuming responsibility is static, modify as needed
                     "Continuous",  # Assuming frequency is static, modify as needed
@@ -54,7 +54,7 @@ class SCDGenerator:
                 ])
 
                 # Debugging: Print the matched control information
-                print(f"Matched Control: {control_id}, {row.get('Control Description')}")
+                print(f"Matched Control: {control_id}, {row.get('control description')}")
 
         # Check if any data was added to output_data
         if not output_data:
