@@ -19,10 +19,15 @@ class AIModel:
         )
 
         try:
+            print(f"Prompt sent to the model:\n{prompt}")  # Debugging: Show the prompt
             messages = [{"role": "user", "content": prompt}]
             response = self.model.invoke(messages)
             response_text = response.content
             clean_response = response_text.strip()
+
+            # Debugging: Check if a response was generated
+            if not clean_response:
+                print("Model returned an empty response.")
             return clean_response
         except Exception as e:
             print("Error generating SCD:", e)
