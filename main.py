@@ -8,28 +8,31 @@ class SCDGenerator:
         # Initialize the output data list
         output_data = []
 
-        # Loop through each row of the dataset to generate controls
+        # Analyzing user prompt and filtering dataset accordingly
         for index, row in df.iterrows():
-            # Extract relevant information from the dataset
-            control_name = row.get('Control Name', f"Control for {index + 1}")
-            description = row.get('Description', f"Description for control {index + 1}")
-            implementation_details = row.get('Implementation Details', "Implement according to best practices.")
-            responsibility = row.get('Responsibility', "Customer")
-            frequency = row.get('Frequency', "Continuous")
+            # Analyze the prompt for keywords (you can refine this based on your requirements)
+            if control_request.lower() in row.get('Control Name', '').lower() or \
+               control_request.lower() in row.get('Description', '').lower():
+                
+                control_name = row.get('Control Name', f"Control for {index + 1}")
+                description = row.get('Description', f"Description for control {index + 1}")
+                implementation_details = row.get('Implementation Details', "Implement according to best practices.")
+                responsibility = row.get('Responsibility', "Customer")
+                frequency = row.get('Frequency', "Continuous")
 
-            # Generate Control ID based on the index or specific logic
-            control_id = f"CTRL-{index + 1:03}"
+                # Generate Control ID based on the index or specific logic
+                control_id = f"CTRL-{index + 1:03}"
 
-            # Add the generated control details to the output data
-            output_data.append([
-                control_id,
-                control_name,
-                description,
-                implementation_details,
-                responsibility,
-                frequency,
-                "Evidence required."  # This could also be dynamic if needed
-            ])
+                # Add the generated control details to the output data
+                output_data.append([
+                    control_id,
+                    control_name,
+                    description,
+                    implementation_details,
+                    responsibility,
+                    frequency,
+                    "Evidence required."  # This could also be dynamic if needed
+                ])
 
         # Create a DataFrame from the output data
         output_df = pd.DataFrame(output_data, columns=[
