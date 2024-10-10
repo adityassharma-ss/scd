@@ -1,5 +1,5 @@
 import pandas as pd
-from ai_model import AIModel
+from src.model.ai_model import AIModel
 
 class SCDGenerator:
     def __init__(self):
@@ -17,63 +17,44 @@ class SCDGenerator:
         print("Dataset Preview:")
         print(df.head())  # Print the first few rows of the dataset for inspection
 
-        # Clean up the dataset: strip whitespace and lower case for easier matching
-        df.columns = df.columns.str.strip().str.lower()
-        df['control description'] = df['control description'].str.strip().str.lower()
-        df['guidance'] = df['guidance'].str.strip().str.lower()
-
-        # Convert control request to lower case for matching
-        prompt_lower = control_request.lower()
+        # Check for expected columns in the dataset
+        expected_columns = ['Control ID', 'Control Description', 'Guidance', 'Cloud Service']
+        for col in expected_columns:
+            if col not in df.columns:
+                print(f"Warning: Missing expected column '{col}' in the dataset.")
+                return None
 
         # Analyzing user prompt and filtering dataset accordingly
         for index, row in df.iterrows():
-            control_description = row.get('control description', '')
-            guidance = row.get('guidance', '')
+            if self._matches_prompt(row, control_request):
+                # Prepare the SCD definition based on the row and user prompt
+                scd_entry = {
+                    'Control ID': row['Control ID'],
+                    'Control Description': row['Control Description'],
+                    'Guidance': row['Guidance'],
+                    'Cloud Service': row['Cloud Service'],
+                    'User Prompt Match': control_request  # Include prompt to track matched result
+                }
+                output_data.append(scd_entry)
 
-            # Check if the prompt matches either the Control Description or Guidance
-            if prompt_lower in control_description or prompt_lower in guidance:
-                control_id = row.get('control id', f"CTRL-{index + 1:03d}")
+        # Save the output to both Markdown and CSV
+        self._save_output(output_data, output_file_path)
 
-                # Generate the detailed security control definition using AI model
-                ai_response = self.ai_model.generate_scd(
-                    cloud=row.get('cloud service', 'Unknown'),
-                    service=row.get('config rule', 'Unknown'),  # Assuming Config Rule relates to service
-                    control_name=row.get('control description', 'Unknown'),
-                    description=row.get('guidance', 'Unknown')
-                )
+    def _matches_prompt(self, row, control_request):
+        # Logic to determine if a row matches the control request (user prompt)
+        control_description = row['Control Description'].lower()
+        return control_request.lower() in control_description
 
-                # Append to output data
-                output_data.append([
-                    control_id,
-                    row.get('control description', f"Control for {index + 1}"),
-                    row.get('guidance', f"Description for control {index + 1}"),
-                    ai_response if ai_response else "No response generated",
-                    "Customer",  # Assuming responsibility is static, modify as needed
-                    "Continuous",  # Assuming frequency is static, modify as needed
-                    "Evidence required."
-                ])
-
-                # Debugging: Print the matched control information
-                print(f"Matched Control: {control_id}, {row.get('control description')}")
-
-        # Check if any data was added to output_data
-        if not output_data:
-            print("No controls matched the user prompt.")
-            return None
-
-        # Create a DataFrame from the output data
-        output_df = pd.DataFrame(output_data, columns=[
-            'Control ID',
-            'Control Name',
-            'Description',
-            'Implementation Details',
-            'Responsibility',
-            'Frequency',
-            'Evidence'
-        ])
-
-        # Write the output DataFrame to a CSV file
-        output_df.to_csv(output_file_path, index=False)
-
-        print(f"Output successfully written to {output_file_path}")
-        return output_df
+    def _save_output(self, output_data, output_file_path):
+        # Save as .md file
+        md_output = f"{output_file_path}.md"
+        with open(md_output, 'w') as md_file:
+            for item in output_data:
+                md_file.write(f"### Control ID: {item['Control ID']}\n")
+                md_file.write(f"- Control Description: {item['Control Description']}\n")
+                md_file.write(f"- Guidance: {item['Guidance']}\n")
+                md_file.write(f"- Cloud Service: {item['Cloud Service']}\n\n")
+        
+        # Save as .csv file
+        csv_output = f"{output_file_path}.csv"
+        pd.DataFrame(output_data).to_csv(csv_output, index=False)
