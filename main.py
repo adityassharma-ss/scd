@@ -1,80 +1,42 @@
-import pandas as pd
-from src.model.ai_model import AIModel
-from fuzzywuzzy import fuzz
+from langchain.chat_models import ChatOpenAI
+from langchain.prompts import PromptTemplate
+from src.utils.config import Config
 
-class SCDGenerator:
+class AIModel:
     def __init__(self):
-        self.ai_model = AIModel()
-
-    def process_scd(self, input_file_path, output_file_path, control_request):
-        df = pd.read_csv(input_file_path)
+        # Initialize the OpenAI model with LangChain and temperature control for creativity
+        self.model = ChatOpenAI(api_key=Config().get_openai_api_key(), temperature=0.7)
+    
+    def generate_scd(self, cloud, service, control_name, description, user_prompt):
+        """Generate Security Control Definitions using the AI model based on user input."""
         
-        print(f"User Prompt: {control_request}")
-        print("Dataset Preview:")
-        print(df.head())
+        prompt = (
+            f"You are a cloud security expert. Generate a detailed security control definition based on the following:\n"
+            f"Cloud: {cloud}\n"
+            f"Service: {service}\n"
+            f"Control Name: {control_name}\n"
+            f"Description: {description}\n"
+            f"User Prompt: {user_prompt}\n"
+            f"Provide the Implementation Details, Responsibility, Frequency, and Evidence required.\n"
+        )
         
-        expected_columns = ['Control ID', 'Control Description', 'Guidance', 'Cloud Service']
-        for col in expected_columns:
-            if col not in df.columns:
-                print(f"Warning: Missing expected column '{col}' in the dataset.")
-                return None
-        
-        output_data = []
-        keywords = control_request.lower().split()
-        
-        for index, row in df.iterrows():
-            control_description = row.get('Control Description', '').lower()
-            cloud_service = row.get('Cloud Service', '').lower()
-            guidance = row.get('Guidance', '').lower()
+        try:
+            # Debugging: Show the prompt being sent to the model
+            print(f"Prompt sent to the model:\n{prompt}")
+            messages = [{"role": "user", "content": prompt}]
             
-            # Check if any keyword matches or if there's a high fuzzy match ratio
-            if any(keyword in control_description or 
-                   keyword in guidance or 
-                   keyword in cloud_service or
-                   fuzz.partial_ratio(keyword, control_description) > 80 or
-                   fuzz.partial_ratio(keyword, guidance) > 80 or
-                   fuzz.partial_ratio(keyword, cloud_service) > 80
-                   for keyword in keywords):
-                
-                control_id = row.get('Control ID', f"CTRL-{index + 1:03d}")
-                
-                ai_response = self.ai_model.generate_scd(
-                    cloud=row.get('Cloud Service', 'Unknown'),
-                    service=row.get('Config Rule', 'Unknown'),
-                    control_name=row.get('Control Description', 'Unknown'),
-                    description=row.get('Guidance', 'Unknown'),
-                    user_prompt=control_request
-                )
-                
-                if ai_response:
-                    parts = ai_response.split('\n')
-                    implementation_details = next((p.split(': ', 1)[1] for p in parts if p.startswith('Implementation Details:')), '')
-                    responsibility = next((p.split(': ', 1)[1] for p in parts if p.startswith('Responsibility:')), 'Customer')
-                    frequency = next((p.split(': ', 1)[1] for p in parts if p.startswith('Frequency:')), 'Continuous')
-                    evidence = next((p.split(': ', 1)[1] for p in parts if p.startswith('Evidence:')), 'Evidence required.')
-                    
-                    output_data.append([
-                        control_id,
-                        row.get('Control Description', f"Control for {index + 1}"),
-                        row.get('Guidance', f"Description for control {index + 1}"),
-                        implementation_details,
-                        responsibility,
-                        frequency,
-                        evidence
-                    ])
-                    
-                    print(f"Matched Control: {control_id}, {row.get('Control Description')}")
+            # Call the AI model to generate a response
+            response = self.model.invoke(messages)
+            response_text = response.content
+            
+            # Clean the response
+            clean_response = response_text.strip()
+            if not clean_response:
+                print("Model returned an empty response.")
+                return None
+            
+            return clean_response
         
-        if not output_data:
-            print("No controls matched the user prompt.")
+        except Exception as e:
+            print(f"Error generating SCD: {e}")
             return None
-        
-        output_df = pd.DataFrame(output_data, columns=[
-            'Control ID', 'Control Name', 'Description', 'Implementation Details',
-            'Responsibility', 'Frequency', 'Evidence'
-        ])
-        
-        output_df.to_csv(output_file_path, index=False)
-        print(f"Output successfully written to {output_file_path}")
-        
-        return output_df
