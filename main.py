@@ -1,58 +1,69 @@
-import pandas as pd
+import streamlit as st
+import tempfile
+from src.output.scd_generator import SCDGenerator
 
-def save_scd(scd_text, output_file_path):
-    """Save the generated SCD to a CSV file, ensuring that each implementation detail fills its own row."""
+def main():
+    st.title("Cloud Security Control Definition (SCD) App")
 
-    # Split the SCD text by double newlines to separate sections
-    scd_sections = scd_text.split('\n\n')
-    rows = []
+    # Initialize the SCD Generator
+    if 'scd_generator' not in st.session_state:
+        st.session_state.scd_generator = SCDGenerator()
 
-    # Parse each section into a structured format
-    for section in scd_sections:
-        lines = section.split('\n')
-        entry_data = {}
-        
-        # Extracting control fields
-        for line in lines:
-            if ':' in line:
-                key, value = line.split(':', 1)
-                entry_data[key.strip()] = value.strip()
-        
-        # Check for Implementation Details and split them
-        if 'Implementation Details' in entry_data:
-            implementation_details = entry_data['Implementation Details'].split(',')  # Split by commas
-            for detail in implementation_details:
-                # Create a row for each implementation detail
-                rows.append({
-                    'Control Name': entry_data.get('Control Name', ''),
-                    'Control ID': entry_data.get('Control ID', ''),
-                    'Implementation Detail': detail.strip()  # Save each detail
-                })
+    # Initialize session state for storing SCDs
+    if 'scds' not in st.session_state:
+        st.session_state.scds = []
+
+    # Upload CSV files for datasets
+    uploaded_files = st.file_uploader("Upload your dataset (CSV format)", type=["csv"], accept_multiple_files=True)
+
+    if uploaded_files:
+        file_paths = []
+        for uploaded_file in uploaded_files:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as temp_file:
+                temp_file.write(uploaded_file.getvalue())
+                file_paths.append(temp_file.name)
+
+        # Load the datasets
+        st.session_state.scd_generator.load_dataset(file_paths)
+        st.success("Datasets loaded successfully!")
+
+    # User prompt for SCD generation
+    user_prompt = st.text_input("Enter a prompt for SCD generation (e.g., 'Generate Security Control for S3 bucket')")
+
+    # Select output format
+    output_format = st.selectbox("Select output format", ["Markdown", "CSV"])
+
+    # Generate SCD report button
+    if st.button("Generate SCD Report"):
+        if user_prompt:
+            scd = st.session_state.scd_generator.generate_scd(user_prompt)
+            st.session_state.scds.append(scd)
+            st.text_area("Generated SCD:", scd, height=300)
         else:
-            # If no implementation details, just save the row with empty details
-            rows.append({
-                'Control Name': entry_data.get('Control Name', ''),
-                'Control ID': entry_data.get('Control ID', ''),
-                'Implementation Detail': ''
-            })
-    
-    # Create DataFrame from the rows list
-    df = pd.DataFrame(rows)
+            st.warning("Please enter a prompt for SCD generation.")
 
-    # Save the DataFrame to CSV
-    df.to_csv(output_file_path, index=False)
-    print(f"SCD saved to {output_file_path}")
+    # File name input
+    file_name = st.text_input("Enter file name for SCD (without extension)", "generated_scd")
 
-# Example usage (can be replaced with any model-generated text)
-scd_example = """
-Control Name: Some Control
-Control ID: CTRL-001
-Implementation Details: Detail 1, Detail 2, Detail 3
+    # Save and download SCDs
+    if st.button("Save and Download SCDs"):
+        if st.session_state.scds:
+            file_extension = "md" if output_format == "Markdown" else "csv"
+            output_file_path = f"{file_name}.{file_extension}"
+            combined_scd = "\n\n---\n\n".join(st.session_state.scds)
+            st.session_state.scd_generator.save_scd(combined_scd, output_file_path, format=file_extension)
 
-Control Name: Another Control
-Control ID: CTRL-002
-Implementation Details: Another Detail 1, Another Detail 2
-"""
+            with open(output_file_path, "rb") as file:
+                st.download_button(
+                    label=f"Download {output_format} File",
+                    data=file,
+                    file_name=output_file_path,
+                    mime="text/plain" if output_format == "Markdown" else "text/csv"
+                )
 
-output_file_path = '/mnt/data/output_scd.csv'
-save_scd(scd_example, output_file_path)
+            st.success(f"SCDs saved and ready for download as {output_file_path}")
+        else:
+            st.warning("No SCDs generated yet. Generate at least one SCD before saving.")
+
+if __name__ == "__main__":
+    main()
