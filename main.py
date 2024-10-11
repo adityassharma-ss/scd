@@ -1,71 +1,36 @@
-import streamlit as st
-import tempfile
-from src.output.scd_generator import SCDGenerator
-import os
 
-def main():
-    st.title("Cloud Security Control Definition (SCD) App")
+class IOHandler:
+    @staticmethod
+    def save_to_csv(data, file_path):
+        """Save data to a CSV file, ensuring that implementation details are split into rows."""
+        rows = []
+        for row in data:
+            # Use regex to split on number patterns (e.g., "1.", "2.", "3.")
+            implementation_details = re.split(r'(?<=\d)\.\s*', row['Implementation Details'])  # Split by digits followed by a period
+            for detail in implementation_details:
+                new_row = row.copy()  # Copy the row to preserve the rest of the columns
+                new_row['Implementation Details'] = detail.strip()  # Set the current implementation detail
+                rows.append(new_row)
 
-    # Initialize the SCD Generator
-    if 'scd_generator' not in st.session_state:
-        st.session_state.scd_generator = SCDGenerator()
+        # Convert the processed rows into a DataFrame and save as CSV
+        df = pd.DataFrame(rows)
+        df.to_csv(file_path, index=False)
+        print(f"Data saved to {file_path}")
 
-    # Initialize session state for storing SCDs
-    if 'scds' not in st.session_state:
-        st.session_state.scds = []
-
-    # Upload CSV file for dataset
-    uploaded_files = st.file_uploader("Upload your dataset (CSV format)", type=["csv"], accept_multiple_files=True)
-
-    if uploaded_files:
-        # Save uploaded files to a temporary location
-        temp_file_paths = []
-        for uploaded_file in uploaded_files:
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.csv') as temp_file:
-                temp_file.write(uploaded_file.getvalue())
-                temp_file_paths.append(temp_file.name)
-
-        # Load the datasets
-        st.session_state.scd_generator.load_datasets(temp_file_paths)
-        st.success("Datasets loaded successfully!")
-
-    # User input prompt for SCD generation
-    user_prompt = st.text_input("Enter a prompt for SCD generation (e.g., 'Generate Security Control for S3 bucket')")
-    
-    # Select output format
-    output_format = st.selectbox("Select output format", ["Markdown", "CSV"])
-
-    # Generate SCD report button
-    if st.button("Generate SCD Report"):
-        if user_prompt:
-            scd = st.session_state.scd_generator.generate_scd(user_prompt)
-            st.session_state.scds.append(scd)
-            st.text_area("Generated SCD:", scd, height=300)
-        else:
-            st.warning("Please enter a prompt for SCD generation.")
-
-    # File name input for saving
-    file_name = st.text_input("Enter file name for SCD (without extension)", "generated_scd")
-
-    # Save and download SCDs
-    if st.button("Save and Download SCDs"):
-        if st.session_state.scds:
-            file_extension = "md" if output_format == "Markdown" else "csv"
-            output_file_path = f"{file_name}.{file_extension}"
-            combined_scd = "\n\n---\n\n".join(st.session_state.scds)
-
-            st.session_state.scd_generator.save_scd(combined_scd, output_file_path, format=file_extension)
-
-            with open(output_file_path, "rb") as file:
-                st.download_button(
-                    label=f"Download {output_format} File",
-                    data=file,
-                    file_name=output_file_path,
-                    mime="text/plain" if output_format == "Markdown" else "text/csv"
-                )
-            st.success(f"SCDs saved and ready for download as {output_file_path}")
-        else:
-            st.warning("No SCDs generated yet. Generate at least one SCD before saving.")
-
-if __name__ == "__main__":
-    main()
+    @staticmethod
+    def save_to_md(data, file_path):
+        """Save data to a Markdown file, ensuring that implementation details are split."""
+        with open(file_path, 'w') as md_file:
+            for row in data:
+                md_file.write(f"## {row['Control ID']} - {row['Cloud Service']}\n")
+                md_file.write(f"**Category**: {row['Category']}\n")
+                md_file.write(f"**Control Description**: {row['Control Description']}\n")
+                
+                # Split implementation details using regex
+                implementation_details = re.split(r'(?<=\d)\.\s*', row['Implementation Details'])
+                md_file.write("### Implementation Details:\n")
+                for detail in implementation_details:
+                    md_file.write(f"- {detail.strip()}\n")
+                
+                md_file.write("\n---\n")
+        print(f"Data saved to {file_path}")
