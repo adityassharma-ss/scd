@@ -1,43 +1,53 @@
-import streamlit as st
-import tempfile
-from src.output.scd_generator import SCDGenerator
+from langchain_openai import ChatOpenAI
+from langchain.prompts import PromptTemplate
+from langchain.chains import LLMChain
+from src.utils.config import Config
 
-def main():
-    st.title("Cloud Security Control Definition (SCD) App")
+class AIModel:
+    def __init__(self):
+        self.model = ChatOpenAI(api_key=Config().get_openai_api_key(), temperature=0.7)
+        self.dataset_summary = ""
+        self.control_ids = {}
 
-    # Initialize the SCD Generator
-    scd_generator = SCDGenerator()
+    def set_dataset_info(self, summary, control_ids):
+        """Set the dataset summary and control IDs for the model to use"""
+        self.dataset_summary = summary
+        self.control_ids = control_ids
 
-    # Upload CSV file for dataset
-    uploaded_file = st.file_uploader("Upload your dataset (CSV format)", type=["csv"])
+    def generate_scd(self, user_prompt, service):
+        """Generate SCD based on user prompt, dataset summary, and service"""
+        control_id = self.control_ids.get(service, "SCD-XXX")
+        
+        prompt_template = PromptTemplate(
+            input_variables=["dataset_summary", "user_prompt", "service", "control_id"],
+            template="""
+            You are a cloud security expert with access to a dataset of security controls.
 
-    if uploaded_file is not None:
-        # Save uploaded file to a temporary location
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.csv') as temp_file:
-            temp_file.write(uploaded_file.getvalue())
-            temp_file_path = temp_file.name
+            Dataset summary: {dataset_summary}
 
-        # Load the dataset
-        scd_generator.load_dataset(temp_file_path)
-        st.success("Dataset loaded successfully!")
+            Based on this dataset and the following user request, generate a detailed Security Control Definition (SCD) for the service: {service}
 
-        # Input prompt from user for the SCD generation
-        user_prompt = st.text_input("Enter a prompt for SCD generation (e.g., 'Generate Security Control for S3 bucket encryption')")
+            User request: {user_prompt}
 
-        # Generate SCD report button
-        if st.button("Generate SCD Report"):
-            if user_prompt:
-                scd = scd_generator.generate_scd(user_prompt)
-                st.text_area("Generated SCD:", scd, height=300)
+            Provide your response in the following format:
+            1. Control ID: {control_id}
+            2. Control Name: [Name of the control]
+            3. Description: [Brief description of the control]
+            4. Implementation Details: [Detailed steps for implementing the control]
+            5. Responsibility: [Who is responsible for implementing this control]
+            6. Frequency: [How often should this control be reviewed/implemented]
+            7. Evidence: [What evidence is required to prove this control is in place]
 
-                # Option to save the SCD
-                if st.button("Save SCD to File"):
-                    output_file_path = "generated_scd.md"
-                    scd_generator.save_scd(scd, output_file_path)
-                    st.success(f"SCD saved to {output_file_path}")
-                    st.download_button("Download SCD", scd, file_name="generated_scd.md")
-            else:
-                st.warning("Please enter a prompt for SCD generation.")
+            Ensure your response is relevant to the user's request and based on the information available in the dataset.
+            """
+        )
 
-if __name__ == "__main__":
-    main()
+        chain = LLMChain(llm=self.model, prompt=prompt_template)
+        response = chain.invoke({
+            "dataset_summary": self.dataset_summary,
+            "user_prompt": user_prompt,
+            "service": service,
+            "control_id": control_id
+        })
+
+        return response['text']
