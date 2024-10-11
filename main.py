@@ -1,36 +1,50 @@
-def save_scd(self, scd, output_file_path, format='md'):
-    """Save the generated SCD to a file"""
-    if format == 'md':
-        with open(output_file_path, 'w') as f:
-            f.write(scd)
-    elif format == 'csv':
-        # Split SCD entries and process for CSV
-        scds = scd.split("\n\n---\n\n")
-        csv_data = []
-        
-        for scd_entry in scds:
-            entry_data = {}
-            lines = scd_entry.split('\n')
-            
-            for line in lines:
-                if ':' in line:
-                    key, value = line.split(':', 1)
-                    entry_data[key.strip()] = value.strip()
+import pandas as pd
 
-            # Ensure that implementation details are in a single row
-            if 'Implementation Details' in entry_data:
-                details = entry_data['Implementation Details'].split(',')  # Assuming details are comma-separated
-                entry_data['Implementation Details'] = details  # Store as a list for row-wise filling
-                
-            csv_data.append(entry_data)
+def save_scd(scd_text, output_file_path):
+    """Save the generated SCD to a CSV file where each implementation detail is in a different row."""
+    
+    # Splitting SCD into sections
+    scd_sections = scd_text.split('\n\n')
+    implementation_details_list = []
 
-        # Convert to a dataframe
-        df = pd.DataFrame(csv_data)
+    # Extract Implementation Details and other fields
+    for section in scd_sections:
+        lines = section.split('\n')
+        entry_data = {}
         
-        # Ensure each row contains one implementation detail
-        df = df.explode('Implementation Details')
+        for line in lines:
+            if ':' in line:
+                key, value = line.split(':', 1)
+                entry_data[key.strip()] = value.strip()
         
-        # Save to CSV
-        df.to_csv(output_file_path, index=False)
+        # If there are implementation details, split them into multiple rows
+        if 'Implementation Details' in entry_data:
+            implementation_details = entry_data['Implementation Details'].split(',')  # Assuming they're comma-separated
+            for detail in implementation_details:
+                # Each detail gets its own row
+                implementation_details_list.append({
+                    'Control Name': entry_data.get('Control Name', ''),
+                    'Control ID': entry_data.get('Control ID', ''),
+                    'Implementation Detail': detail.strip()
+                })
+    
+    # Convert to a pandas DataFrame
+    df = pd.DataFrame(implementation_details_list)
 
+    # Save DataFrame to CSV
+    df.to_csv(output_file_path, index=False)
     print(f"SCD saved to {output_file_path}")
+
+# Example usage
+scd_example = """
+Control Name: Secure EC2 Access
+Control ID: EC2-001
+Implementation Details: Enable MFA for EC2 access, Use IAM roles instead of root access, Ensure instance profiles are properly configured
+
+Control Name: EC2 Network Security
+Control ID: EC2-002
+Implementation Details: Implement VPC security groups, Use NACLs for additional filtering, Ensure proper subnet isolation
+"""
+
+output_file_path = '/mnt/data/output_scd.csv'
+save_scd(scd_example, output_file_path)
