@@ -1,62 +1,105 @@
-
-import streamlit as st
 import pandas as pd
-import io
-from src.output.scd_generator import SCDGenerator  # Assuming you have this implemented elsewhere
+from src.model.ai_model import AIModel
 
-def main():
-    st.title("Cloud Security Control Definition (SCD) App")
+class SCDGenerator:
+    def __init__(self):
+        self.ai_model = AIModel()
 
-    # Step 1: File Upload
-    uploaded_file = st.file_uploader("Upload your dataset (CSV format)", type=["csv"])
+    def process_scd(self, input_file_path, output_file_path, control_request):
+        # Load the dataset
+        df = pd.read_csv(input_file_path)
 
-    if uploaded_file is not None:
-        # Display the dataset for the user's review
-        df = pd.read_csv(uploaded_file)
-        st.write("Dataset Preview:")
-        st.dataframe(df)
+        # Initialize the output data list
+        output_data = []
 
-        # Step 2: User Prompt
-        user_prompt = st.text_input(
-            "Enter a prompt for SCD generation (e.g., 'Generate Security Control Definitions for creating S3 bucket')"
-        )
+        # Debugging: Print the incoming prompt and dataset
+        print(f"User Prompt: {control_request}")
+        print("Dataset Preview:")
+        print(df.head())  # Print the first few rows of the dataset for inspection
 
-        # Dropdown to select the output format (Markdown or CSV)
-        output_format = st.selectbox("Choose the output format", ("Markdown", "CSV"))
+        # Check for expected columns in the dataset
+        expected_columns = ['Control ID', 'Control Description', 'Guidance', 'Cloud Service']
+        for col in expected_columns:
+            if col not in df.columns:
+                print(f"Warning: Missing expected column '{col}' in the dataset.")
+                return None
 
-        # Step 3: Generate the SCD report when the button is clicked
-        if st.button("Generate SCD Report"):
-            scd_generator = SCDGenerator()
+        # Analyzing user prompt and filtering dataset accordingly
+        for index, row in df.iterrows():
+            control_description = row.get('Control Description', '').lower()
+            cloud_service = row.get('Cloud Service', '').lower()
+            guidance = row.get('Guidance', '').lower()
+            prompt_lower = control_request.lower()
 
-            try:
-                # Process the SCD with user prompt and generate content in-memory
-                output_data = scd_generator.process_scd(df, user_prompt)
+            if prompt_lower in control_description or prompt_lower in guidance or prompt_lower in cloud_service:
+                control_id = row.get("Control ID", f"CTRL-{index+1:03d}")
 
-                # Step 4: Prepare the output for download
-                if output_format.lower() == "markdown":
-                    # Convert output to Markdown format
-                    output_buffer = io.StringIO(output_data)
-                    st.download_button(
-                        label="Download SCD Report",
-                        data=output_buffer.getvalue(),
-                        file_name="scd_report.md",
-                        mime="text/markdown"
-                    )
-                else:
-                    # Convert output to CSV format
-                    output_buffer = io.StringIO()
-                    output_data.to_csv(output_buffer, index=False)
-                    st.download_button(
-                        label="Download SCD Report",
-                        data=output_buffer.getvalue(),
-                        file_name="scd_report.csv",
-                        mime="text/csv"
-                    )
+                # Generate the detailed security control definition using AI model
+                ai_response = self.ai_model.generate_scd(
+                    cloud=row.get('Cloud Service', 'Unknown'),
+                    service=row.get('Config Rule', 'Unknown'),  # Assuming Config Rule relates to service
+                    control_name=row.get('Control Description', 'Unknown'),
+                    description=row.get('Guidance', 'Unknown'),
+                    user_prompt=control_request
+                )
 
-                st.success(f"SCD report generated successfully.")
-            
-            except Exception as e:
-                st.error(f"An error occurred while generating the report: {e}")
+                # Parse AI response
+                implementation_details, responsibility, frequency, evidence = self.parse_ai_response(ai_response)
 
-if __name__ == "__main__":
-    main()
+                # Append to output data
+                output_data.append([
+                    control_id,
+                    row.get("Control Description", f"Control for {index + 1}"),
+                    row.get('Guidance', f"Description for control {index + 1}"),
+                    implementation_details,
+                    responsibility,
+                    frequency,
+                    evidence
+                ])
+
+                # Debugging: Print the matched control information
+                print(f"Matched Control: {control_id}, {row.get('Control Description')}")
+
+        # Check if any data was added to output_data
+        if not output_data:
+            print("No controls matched the user prompt.")
+            return None
+
+        # Create a DataFrame from the output data
+        output_df = pd.DataFrame(output_data, columns=[
+            'Control ID',
+            'Control Name',
+            'Description',
+            'Implementation Details',
+            'Responsibility',
+            'Frequency',
+            'Evidence'
+        ])
+
+        # Write the output DataFrame to a CSV file
+        output_df.to_csv(output_file_path, index=False)
+        print(f"Output successfully written to {output_file_path}")
+
+        return output_df
+
+    def parse_ai_response(self, ai_response):
+        # Initialize default values
+        implementation_details = "Not provided"
+        responsibility = "Not specified"
+        frequency = "Not specified"
+        evidence = "Not specified"
+
+        # Split the response into sections
+        sections = ai_response.split('\n\n')
+
+        for section in sections:
+            if section.startswith("Implementation Details:"):
+                implementation_details = section.split(":", 1)[1].strip()
+            elif section.startswith("Responsibility:"):
+                responsibility = section.split(":", 1)[1].strip()
+            elif section.startswith("Frequency:"):
+                frequency = section.split(":", 1)[1].strip()
+            elif section.startswith("Evidence:"):
+                evidence = section.split(":", 1)[1].strip()
+
+        return implementation_details, responsibility, frequency, evidence
