@@ -1,85 +1,41 @@
+import streamlit as st
 import pandas as pd
+import tempfile
+from src.output.scd_generator import SCDGenerator
 from src.model.ai_model import AIModel
 
-class SCDGenerator:
-    def __init__(self):
-        self.ai_model = AIModel()
+def main():
+    st.title("Cloud Security Control Definition (SCD) App")
 
-    def process_scd(self, input_file_path, output_file_path, control_request, output_format='csv'):
-        """Process and generate security control definitions."""
-        # Load the dataset
-        df = pd.read_csv(input_file_path)
+    # Upload CSV file for dataset
+    uploaded_file = st.file_uploader("Upload your dataset (CSV format)", type=["csv"])
 
-        # Initialize the output data list
-        output_data = []
+    if uploaded_file is not None:
+        # Save uploaded file to a temporary location
+        temp_input_file = tempfile.NamedTemporaryFile(delete=False)
+        temp_input_file.write(uploaded_file.getvalue())
+        temp_input_file.close()
 
-        # Debugging: Print the incoming prompt and dataset
-        print(f"User Prompt: {control_request}")
-        print("Dataset Preview:")
-        print(df.head())  # Print the first few rows of the dataset for inspection
+        # Display the dataset in Streamlit for user to see
+        df = pd.read_csv(temp_input_file.name)
+        st.write("Dataset Preview:")
+        st.dataframe(df)
 
-        # Check for expected columns in the dataset
-        expected_columns = ['Control ID', 'Control Description', 'Guidance', 'Cloud Service']
-        for col in expected_columns:
-            if col not in df.columns:
-                print(f"Warning: Missing expected column '{col}' in the dataset.")
-                return None
+        # Input prompt from user for the SCD generation
+        user_prompt = st.text_input("Enter a prompt for SCD generation (e.g., 'Generate Security Control Definitions for creating S3 bucket')")
 
-        # Analyzing user prompt and filtering dataset accordingly
-        for index, row in df.iterrows():
-            control_description = row.get('Control Description', '').lower()
-            cloud_service = row.get('Cloud Service', '').lower()
-            guidance = row.get('Guidance', '').lower()
-            prompt_lower = control_request.lower()
+        # Optionally specify the output file name for the SCD report
+        output_file_path = st.text_input("Enter the output file name for the SCD report", "scd_report.md")
 
-            if prompt_lower in control_description or prompt_lower in cloud_service or prompt_lower in guidance:
-                control_id = row.get("Control ID", f"CTRL-{index + 1:03d}")
+        # Dropdown to select output format (Markdown or CSV)
+        output_format = st.selectbox("Choose the output format", ("Markdown", "CSV"))
 
-                # Generate the detailed security control definition using AI model
-                ai_response = self.ai_model.generate_scd(
-                    cloud=row.get('Cloud Service', 'Unknown'),
-                    service=row.get('Config Rule', 'Unknown'),  # Assuming Config Rule relates to service
-                    control_name=row.get('Control Description', 'Unknown'),
-                    description=row.get('Guidance', 'Unknown'),
-                    user_prompt=control_request
-                )
+        # Generate SCD report button
+        if st.button("Generate SCD Report"):
+            scd_generator = SCDGenerator()
+            scd_generator.process_scd(temp_input_file.name, output_file_path, user_prompt, output_format.lower())
+            st.success(f"SCD report generated and saved to {output_file_path}")
+            st.download_button("Download SCD report", open(output_file_path, "r").read(), file_name=output_file_path)
 
-                # Append to output data
-                output_data.append([
-                    control_id,
-                    row.get('Control Description', f"Control for {index + 1}"),
-                    row.get('Guidance', f"Description for control {index + 1}"),
-                    ai_response if ai_response else "No response generated",
-                    "Customer",  # Assuming responsibility is static, modify as needed
-                    "Continuous",  # Assuming frequency is static, modify as needed
-                    "Evidence required."
-                ])
-
-        if not output_data:
-            print("No controls matched the user prompt.")
-            return None
-
-        # Save output to CSV or Markdown based on user preference
-        if output_format == 'csv':
-            self.save_to_csv(output_data, output_file_path)
-        elif output_format == 'md':
-            self.save_to_markdown(output_data, output_file_path)
-
-    def save_to_csv(self, output_data, output_file_path):
-        """Save the generated SCD to a CSV file."""
-        output_df = pd.DataFrame(output_data, columns=[
-            'Control ID', 'Control Name', 'Description', 'Implementation Details',
-            'Responsibility', 'Frequency', 'Evidence'
-        ])
-        output_df.to_csv(output_file_path, index=False)
-        print(f"Output successfully written to {output_file_path}")
-
-    def save_to_markdown(self, output_data, output_file_path):
-        """Save the generated SCD to a Markdown file."""
-        with open(output_file_path, 'w') as f:
-            for control in output_data:
-                f.write(f"## Cloud Service: {control[1]}\n")
-                f.write(f"### Control ID: {control[0]}\n")
-                f.write(f"### Control Description: {control[2]}\n")
-                f.write(f"{control[3]}\n\n")
-        print(f"SCD Report saved to {output_file_path}")
+if __name__ == "__main__":
+    main()
