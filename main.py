@@ -1,51 +1,54 @@
-import pandas as pd
-from src.model.ai_model import AIModel
+import streamlit as st
+import tempfile
+from src.output.scd_generator import SCDGenerator
 
-class SCDGenerator:
-    def __init__(self):
-        self.ai_model = AIModel()
-        self.dataset = None
+def main():
+    st.title("Cloud Security Control Definition (SCD) App")
 
-    def load_dataset(self, file_path):
-        """Load and process the dataset"""
-        self.dataset = pd.read_csv(file_path)
-        self._summarize_dataset()
+    # Initialize the SCD Generator
+    scd_generator = SCDGenerator()
 
-    def _summarize_dataset(self):
-        """Create a summary of the dataset for the model"""
-        services = self.dataset['Cloud Service'].unique()
-        controls = self.dataset['Control Description'].unique()
-        summary = f"Dataset contains information on {len(services)} cloud services and {len(controls)} controls."
-        
-        control_ids = {}
-        for _, row in self.dataset.iterrows():
-            service = row['Cloud Service']
-            control_id = row.get('Control ID', f"SCD-{len(control_ids) + 1:03d}")
-            if service not in control_ids:
-                control_ids[service] = control_id
+    # Upload CSV file for dataset
+    uploaded_file = st.file_uploader("Upload your dataset (CSV format)", type=["csv"])
 
-        self.ai_model.set_dataset_info(summary, control_ids)
+    if uploaded_file is not None:
+        # Save uploaded file to a temporary location
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.csv') as temp_file:
+            temp_file.write(uploaded_file.getvalue())
+            temp_file_path = temp_file.name
 
-    def generate_scd(self, user_prompt):
-        """Generate SCD based on user prompt"""
-        if self.dataset is None:
-            return "Error: Dataset not loaded. Please load a dataset first."
+        # Load the dataset
+        scd_generator.load_dataset(temp_file_path)
+        st.success("Dataset loaded successfully!")
 
-        # Extract service from user prompt (this is a simple approach and might need refinement)
-        service = next((s for s in self.dataset['Cloud Service'].unique() if s.lower() in user_prompt.lower()), "Unknown")
+        # Input prompt from user for the SCD generation
+        user_prompt = st.text_input("Enter a prompt for SCD generation (e.g., 'Generate Security Control for S3 bucket encryption')")
 
-        return self.ai_model.generate_scd(user_prompt, service)
+        # Select output format
+        output_format = st.selectbox("Select output format", ["Markdown", "CSV"])
 
-    def save_scd(self, scd, output_file_path, format='md'):
-        """Save the generated SCD to a file"""
-        if format == 'md':
-            with open(output_file_path, 'w') as f:
-                f.write(scd)
-        elif format == 'csv':
-            # Convert SCD to CSV format
-            lines = scd.split('\n')
-            csv_data = [line.split(': ', 1) for line in lines if ': ' in line]
-            df = pd.DataFrame(csv_data, columns=['Field', 'Value'])
-            df.to_csv(output_file_path, index=False)
-        
-        print(f"SCD saved to {output_file_path}")
+        # Generate SCD report button
+        if st.button("Generate SCD Report"):
+            if user_prompt:
+                scd = scd_generator.generate_scd(user_prompt)
+                st.text_area("Generated SCD:", scd, height=300)
+
+                # Option to save the SCD
+                if st.button("Save SCD to File"):
+                    file_extension = "md" if output_format == "Markdown" else "csv"
+                    output_file_path = f"generated_scd.{file_extension}"
+                    scd_generator.save_scd(scd, output_file_path, format=file_extension)
+                    st.success(f"SCD saved to {output_file_path}")
+                    
+                    with open(output_file_path, "rb") as file:
+                        st.download_button(
+                            label="Download SCD",
+                            data=file,
+                            file_name=output_file_path,
+                            mime="text/plain" if output_format == "Markdown" else "text/csv"
+                        )
+            else:
+                st.warning("Please enter a prompt for SCD generation.")
+
+if __name__ == "__main__":
+    main()
