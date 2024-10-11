@@ -1,32 +1,43 @@
-import pandas as pd
-from src.model.ai_model import AIModel
+import streamlit as st
+import tempfile
+from src.output.scd_generator import SCDGenerator
 
-class SCDGenerator:
-    def __init__(self):
-        self.ai_model = AIModel()
-        self.dataset = None
+def main():
+    st.title("Cloud Security Control Definition (SCD) App")
 
-    def load_dataset(self, file_path):
-        """Load and process the dataset"""
-        self.dataset = pd.read_csv(file_path)
-        self._summarize_dataset()
+    # Initialize the SCD Generator
+    scd_generator = SCDGenerator()
 
-    def _summarize_dataset(self):
-        """Create a summary of the dataset for the model"""
-        services = self.dataset['Cloud Service'].unique()
-        controls = self.dataset['Control Description'].unique()
-        summary = f"Dataset contains information on {len(services)} cloud services and {len(controls)} controls."
-        self.ai_model.set_dataset_summary(summary)
+    # Upload CSV file for dataset
+    uploaded_file = st.file_uploader("Upload your dataset (CSV format)", type=["csv"])
 
-    def generate_scd(self, user_prompt):
-        """Generate SCD based on user prompt"""
-        if self.dataset is None:
-            return "Error: Dataset not loaded. Please load a dataset first."
+    if uploaded_file is not None:
+        # Save uploaded file to a temporary location
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.csv') as temp_file:
+            temp_file.write(uploaded_file.getvalue())
+            temp_file_path = temp_file.name
 
-        return self.ai_model.generate_scd(user_prompt)
+        # Load the dataset
+        scd_generator.load_dataset(temp_file_path)
+        st.success("Dataset loaded successfully!")
 
-    def save_scd(self, scd, output_file_path):
-        """Save the generated SCD to a file"""
-        with open(output_file_path, 'w') as f:
-            f.write(scd)
-        print(f"SCD saved to {output_file_path}")
+        # Input prompt from user for the SCD generation
+        user_prompt = st.text_input("Enter a prompt for SCD generation (e.g., 'Generate Security Control for S3 bucket encryption')")
+
+        # Generate SCD report button
+        if st.button("Generate SCD Report"):
+            if user_prompt:
+                scd = scd_generator.generate_scd(user_prompt)
+                st.text_area("Generated SCD:", scd, height=300)
+
+                # Option to save the SCD
+                if st.button("Save SCD to File"):
+                    output_file_path = "generated_scd.md"
+                    scd_generator.save_scd(scd, output_file_path)
+                    st.success(f"SCD saved to {output_file_path}")
+                    st.download_button("Download SCD", scd, file_name="generated_scd.md")
+            else:
+                st.warning("Please enter a prompt for SCD generation.")
+
+if __name__ == "__main__":
+    main()
