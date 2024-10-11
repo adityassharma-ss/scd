@@ -1,55 +1,64 @@
-from langchain_openai import ChatOpenAI
-from langchain.prompts import PromptTemplate
-from langchain.chains import LLMChain
-from src.utils.config import Config
+import streamlit as st
+from src.output.scd_generator import SCDGenerator
+import os
+import tempfile
 
-class AIModel:
-    def __init__(self):
-        self.model = ChatOpenAI(api_key=Config().get_openai_api_key(), temperature=0.7)
-        self.dataset_summary = ""
-        self.control_ids = {}
+def main():
+    st.title("Cloud Security Control Definition (SCD) App")
 
-    def set_dataset_info(self, summary, control_ids):
-        """Set the dataset summary and control IDs for the model to use"""
-        self.dataset_summary = summary
-        self.control_ids = control_ids
+    # Initialize the SCD Generator
+    if 'scd_generator' not in st.session_state:
+        st.session_state.scd_generator = SCDGenerator()
 
-    def generate_scd(self, user_prompt, service):
-        """Generate SCD based on user prompt, dataset summary, and service"""
-        control_id = self.control_ids.get(service, "SCD-XXX")
-        prompt_template = PromptTemplate(
-            input_variables=["dataset_summary", "user_prompt", "service", "control_id"],
-            template="""
-You are a cloud security expert with access to a dataset of security controls.
+    # Initialize session state for storing SCDs
+    if 'scds' not in st.session_state:
+        st.session_state.scds = []
 
-Dataset summary: {dataset_summary}
+    # Upload CSV files for dataset
+    uploaded_files = st.file_uploader("Upload your datasets (CSV format)", type=["csv"], accept_multiple_files=True)
 
-Based on this dataset and the following user request, generate a detailed Security Control Definition (SCD) for the following cloud service: {service}
+    if uploaded_files:
+        temp_files = []
+        for uploaded_file in uploaded_files:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as temp_file:
+                temp_file.write(uploaded_file.getvalue())
+                temp_files.append(temp_file.name)
 
-User request: {user_prompt}
+        # Load the dataset
+        st.session_state.scd_generator.load_dataset(temp_files)
+        st.success("Datasets loaded successfully!")
 
-Provide your response in the following format:
+    user_prompt = st.text_input("Enter a prompt for SCD generation (e.g., 'Generate Security Control for S3 bucket')")
 
-Control ID: {control_id}
-Control Name: [Name of the control]
-Description: [Brief description of the control]
-Implementation Details: 
-1. [First detailed step for implementing the control]
-2. [Second step...]
-...
-Responsibility: [Who is responsible for implementing this control]
-Frequency: [How often should this control be reviewed/implemented]
-Evidence: [What evidence is required to prove this control is in place]
+    output_format = st.selectbox("Select output format", ["Markdown", "CSV"])
 
-Ensure your response is relevant to the user's request and based on the information available in the dataset.
-"""
-        )
+    if st.button("Generate SCD Report"):
+        if user_prompt:
+            scd = st.session_state.scd_generator.generate_scd(user_prompt)
+            st.session_state.scds.append(scd)
+            st.text_area("Generated SCD:", scd, height=300)
+        else:
+            st.warning("Please enter a prompt for SCD generation.")
 
-        chain = LLMChain(llm=self.model, prompt=prompt_template)
-        response = chain.invoke({
-            "dataset_summary": self.dataset_summary,
-            "user_prompt": user_prompt,
-            "service": service,
-            "control_id": control_id
-        })
-        return response
+    file_name = st.text_input("Enter file name for SCD (without extension)", "generated_scd")
+
+    if st.button("Save and Download SCDs"):
+        if st.session_state.scds:
+            file_extension = "md" if output_format == "Markdown" else "csv"
+            output_file_path = f"{file_name}.{file_extension}"
+
+            combined_scd = "\n\n---\n\n".join(st.session_state.scds)
+            st.session_state.scd_generator.save_scd(combined_scd, output_file_path, format=file_extension)
+
+            with open(output_file_path, "rb") as file:
+                st.download_button(
+                    label=f"Download {output_format} File",
+                    data=file,
+                    file_name=output_file_path,
+                    mime="text/plain" if output_format == "Markdown" else "text/csv"
+                )
+        else:
+            st.warning("No SCDs generated yet. Generate at least one SCD before saving.")
+
+if __name__ == "__main__":
+    main()
