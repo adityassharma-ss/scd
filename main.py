@@ -1,53 +1,51 @@
-from langchain_openai import ChatOpenAI
-from langchain.prompts import PromptTemplate
-from langchain.chains import LLMChain
-from src.utils.config import Config
+import pandas as pd
+from src.model.ai_model import AIModel
 
-class AIModel:
+class SCDGenerator:
     def __init__(self):
-        self.model = ChatOpenAI(api_key=Config().get_openai_api_key(), temperature=0.7)
-        self.dataset_summary = ""
-        self.control_ids = {}
+        self.ai_model = AIModel()
+        self.dataset = None
 
-    def set_dataset_info(self, summary, control_ids):
-        """Set the dataset summary and control IDs for the model to use"""
-        self.dataset_summary = summary
-        self.control_ids = control_ids
+    def load_dataset(self, file_path):
+        """Load and process the dataset"""
+        self.dataset = pd.read_csv(file_path)
+        self._summarize_dataset()
 
-    def generate_scd(self, user_prompt, service):
-        """Generate SCD based on user prompt, dataset summary, and service"""
-        control_id = self.control_ids.get(service, "SCD-XXX")
+    def _summarize_dataset(self):
+        """Create a summary of the dataset for the model"""
+        services = self.dataset['Cloud Service'].unique()
+        controls = self.dataset['Control Description'].unique()
+        summary = f"Dataset contains information on {len(services)} cloud services and {len(controls)} controls."
         
-        prompt_template = PromptTemplate(
-            input_variables=["dataset_summary", "user_prompt", "service", "control_id"],
-            template="""
-            You are a cloud security expert with access to a dataset of security controls.
+        control_ids = {}
+        for _, row in self.dataset.iterrows():
+            service = row['Cloud Service']
+            control_id = row.get('Control ID', f"SCD-{len(control_ids) + 1:03d}")
+            if service not in control_ids:
+                control_ids[service] = control_id
 
-            Dataset summary: {dataset_summary}
+        self.ai_model.set_dataset_info(summary, control_ids)
 
-            Based on this dataset and the following user request, generate a detailed Security Control Definition (SCD) for the service: {service}
+    def generate_scd(self, user_prompt):
+        """Generate SCD based on user prompt"""
+        if self.dataset is None:
+            return "Error: Dataset not loaded. Please load a dataset first."
 
-            User request: {user_prompt}
+        # Extract service from user prompt (this is a simple approach and might need refinement)
+        service = next((s for s in self.dataset['Cloud Service'].unique() if s.lower() in user_prompt.lower()), "Unknown")
 
-            Provide your response in the following format:
-            1. Control ID: {control_id}
-            2. Control Name: [Name of the control]
-            3. Description: [Brief description of the control]
-            4. Implementation Details: [Detailed steps for implementing the control]
-            5. Responsibility: [Who is responsible for implementing this control]
-            6. Frequency: [How often should this control be reviewed/implemented]
-            7. Evidence: [What evidence is required to prove this control is in place]
+        return self.ai_model.generate_scd(user_prompt, service)
 
-            Ensure your response is relevant to the user's request and based on the information available in the dataset.
-            """
-        )
-
-        chain = LLMChain(llm=self.model, prompt=prompt_template)
-        response = chain.invoke({
-            "dataset_summary": self.dataset_summary,
-            "user_prompt": user_prompt,
-            "service": service,
-            "control_id": control_id
-        })
-
-        return response['text']
+    def save_scd(self, scd, output_file_path, format='md'):
+        """Save the generated SCD to a file"""
+        if format == 'md':
+            with open(output_file_path, 'w') as f:
+                f.write(scd)
+        elif format == 'csv':
+            # Convert SCD to CSV format
+            lines = scd.split('\n')
+            csv_data = [line.split(': ', 1) for line in lines if ': ' in line]
+            df = pd.DataFrame(csv_data, columns=['Field', 'Value'])
+            df.to_csv(output_file_path, index=False)
+        
+        print(f"SCD saved to {output_file_path}")
