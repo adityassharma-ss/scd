@@ -1,39 +1,44 @@
 from langchain_openai import ChatOpenAI
+from langchain.prompts import PromptTemplate
+from langchain.chains import LLMChain
 from src.utils.config import Config
 
 class AIModel:
     def __init__(self):
-        # Initialize the OpenAI model
         self.model = ChatOpenAI(api_key=Config().get_openai_api_key(), temperature=0.7)
+        self.dataset_summary = ""
 
-    def generate_scd(self, cloud, service, control_name, description, user_prompt):
-        """Generate security control definitions using AI model based on user input"""
-        prompt = (
-            f"You are a cloud security expert. Generate a detailed security control definition based on the following: \n"
-            f"Cloud: {cloud}\n"
-            f"Service: {service}\n"
-            f"Control Name: {control_name}\n"
-            f"Description: {description}\n"
-            f"User Prompt: {user_prompt}\n"
-            f"Provide the Implementation Details, Responsibility, Frequency, and Evidence required. "
-            f"Format your response with clear section headers for each of these elements."
+    def set_dataset_summary(self, summary):
+        """Set the dataset summary for the model to use"""
+        self.dataset_summary = summary
+
+    def generate_scd(self, user_prompt):
+        """Generate SCD based on user prompt and dataset summary"""
+        prompt_template = PromptTemplate(
+            input_variables=["dataset_summary", "user_prompt"],
+            template="""
+            You are a cloud security expert with access to a dataset of security controls.
+
+            Dataset summary: {dataset_summary}
+
+            Based on this dataset and the following user request, generate a detailed Security Control Definition (SCD):
+
+            User request: {user_prompt}
+
+            Provide your response in the following format:
+            1. Control ID: [Provide a suitable ID]
+            2. Control Name: [Name of the control]
+            3. Description: [Brief description of the control]
+            4. Implementation Details: [Detailed steps for implementing the control]
+            5. Responsibility: [Who is responsible for implementing this control]
+            6. Frequency: [How often should this control be reviewed/implemented]
+            7. Evidence: [What evidence is required to prove this control is in place]
+
+            Ensure your response is relevant to the user's request and based on the information available in the dataset.
+            """
         )
 
-        try:
-            print(f"Prompt sent to the model:\n{prompt}")  # Debugging: show the prompt
-            messages = [{"role": "user", "content": prompt}]
-            response = self.model.invoke(messages)
-            response_text = response.content
+        chain = LLMChain(llm=self.model, prompt=prompt_template)
+        response = chain.run(dataset_summary=self.dataset_summary, user_prompt=user_prompt)
 
-            clean_response = response_text.strip()
-
-            # Debugging: Check if a response was generated
-            if not clean_response:
-                print("Model returned an empty response.")
-                return "No response generated"
-
-            return clean_response
-
-        except Exception as e:
-            print("Error generating SCD:", e)
-            return "Error generating SCD"
+        return response
