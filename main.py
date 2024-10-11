@@ -1,58 +1,55 @@
-import pandas as pd
-from src.model.ai_model import AIModel
+from langchain_openai import ChatOpenAI
+from langchain.prompts import PromptTemplate
+from langchain.chains import LLMChain
+from src.utils.config import Config
 
-class SCDGenerator:
+class AIModel:
     def __init__(self):
-        self.ai_model = AIModel()
-        self.dataset = None
+        self.model = ChatOpenAI(api_key=Config().get_openai_api_key(), temperature=0.7)
+        self.dataset_summary = ""
+        self.control_ids = {}
 
-    def load_dataset(self, file_paths):
-        """Load and process multiple datasets"""
-        datasets = [pd.read_csv(file_path) for file_path in file_paths]
-        self.dataset = pd.concat(datasets, ignore_index=True)
-        self.summarize_dataset()
+    def set_dataset_info(self, summary, control_ids):
+        """Set the dataset summary and control IDs for the model to use"""
+        self.dataset_summary = summary
+        self.control_ids = control_ids
 
-    def summarize_dataset(self):
-        """Create a summary of the dataset for the model"""
-        services = self.dataset['Cloud Service'].unique()
-        controls = self.dataset['Control Description'].unique()
-        summary = f"Dataset contains information on {len(services)} cloud services and {len(controls)} controls."
-        control_ids = {}
+    def generate_scd(self, user_prompt, service):
+        """Generate SCD based on user prompt, dataset summary, and service"""
+        control_id = self.control_ids.get(service, "SCD-XXX")
+        prompt_template = PromptTemplate(
+            input_variables=["dataset_summary", "user_prompt", "service", "control_id"],
+            template="""
+You are a cloud security expert with access to a dataset of security controls.
 
-        for _, row in self.dataset.iterrows():
-            service = row['Cloud Service']
-            control_id = row.get('Control ID', f"SCD-{len(control_ids) + 1:03d}")
-            if service not in control_ids:
-                control_ids[service] = control_id
+Dataset summary: {dataset_summary}
 
-        self.ai_model.set_dataset_info(summary, control_ids)
+Based on this dataset and the following user request, generate a detailed Security Control Definition (SCD) for the following cloud service: {service}
 
-    def generate_scd(self, user_prompt):
-        """Generate SCD based on user prompt"""
-        if self.dataset is None:
-            return "Error: Dataset not loaded. Please load a dataset first."
+User request: {user_prompt}
 
-        # Extract service from user prompt
-        service = next((s for s in self.dataset['Cloud Service'].unique() if s.lower() in user_prompt.lower()), "Unknown Service")
-        return self.ai_model.generate_scd(user_prompt, service)
+Provide your response in the following format:
 
-    def save_scd(self, scd, output_file_path, format='md'):
-        """Save the generated SCD to a file"""
-        if format == 'md':
-            with open(output_file_path, 'w') as f:
-                f.write(scd)
-        elif format == 'csv':
-            scds = scd.split('\n\n---\n\n')
-            csv_data = []
-            for scd_entry in scds:
-                entry_data = {}
-                for line in scd_entry.split('\n'):
-                    if ':' in line:
-                        key, value = line.split(':', 1)
-                        entry_data[key.strip()] = value.strip()
-                csv_data.append(entry_data)
+Control ID: {control_id}
+Control Name: [Name of the control]
+Description: [Brief description of the control]
+Implementation Details: 
+1. [First detailed step for implementing the control]
+2. [Second step...]
+...
+Responsibility: [Who is responsible for implementing this control]
+Frequency: [How often should this control be reviewed/implemented]
+Evidence: [What evidence is required to prove this control is in place]
 
-            df = pd.DataFrame(csv_data)
-            df.to_csv(output_file_path, index=False)
+Ensure your response is relevant to the user's request and based on the information available in the dataset.
+"""
+        )
 
-        print(f"SCD saved to {output_file_path}")
+        chain = LLMChain(llm=self.model, prompt=prompt_template)
+        response = chain.invoke({
+            "dataset_summary": self.dataset_summary,
+            "user_prompt": user_prompt,
+            "service": service,
+            "control_id": control_id
+        })
+        return response
