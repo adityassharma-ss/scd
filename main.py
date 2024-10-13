@@ -1,36 +1,66 @@
+from langchain import OpenAI
+from langchain.prompts import PromptTemplate
+from langchain.chains import LLMChain
+from src.utils.config import Config
 
-class IOHandler:
-    @staticmethod
-    def save_to_csv(data, file_path):
-        """Save data to a CSV file, ensuring that implementation details are split into rows."""
-        rows = []
-        for row in data:
-            # Use regex to split on number patterns (e.g., "1.", "2.", "3.")
-            implementation_details = re.split(r'(?<=\d)\.\s*', row['Implementation Details'])  # Split by digits followed by a period
-            for detail in implementation_details:
-                new_row = row.copy()  # Copy the row to preserve the rest of the columns
-                new_row['Implementation Details'] = detail.strip()  # Set the current implementation detail
-                rows.append(new_row)
+class AIModel:
+    def __init__(self):
+        self.model = OpenAI(api_key=Config().get_openai_api_key(), temperature=0.7)
+        self.dataset_summary = ""
+        self.control_ids = {}
 
-        # Convert the processed rows into a DataFrame and save as CSV
-        df = pd.DataFrame(rows)
-        df.to_csv(file_path, index=False)
-        print(f"Data saved to {file_path}")
+    def set_dataset_info(self, summary, control_ids):
+        """Set the dataset summary and control IDs for the model to use."""
+        self.dataset_summary = summary
+        self.control_ids = control_ids
 
-    @staticmethod
-    def save_to_md(data, file_path):
-        """Save data to a Markdown file, ensuring that implementation details are split."""
-        with open(file_path, 'w') as md_file:
-            for row in data:
-                md_file.write(f"## {row['Control ID']} - {row['Cloud Service']}\n")
-                md_file.write(f"**Category**: {row['Category']}\n")
-                md_file.write(f"**Control Description**: {row['Control Description']}\n")
-                
-                # Split implementation details using regex
-                implementation_details = re.split(r'(?<=\d)\.\s*', row['Implementation Details'])
-                md_file.write("### Implementation Details:\n")
-                for detail in implementation_details:
-                    md_file.write(f"- {detail.strip()}\n")
-                
-                md_file.write("\n---\n")
-        print(f"Data saved to {file_path}")
+    def generate_scds(self, user_prompt, service):
+        """Generate multiple SCDs based on user prompt, dataset, and service."""
+        control_ids = self.control_ids.get(service, [])
+        
+        # Check if we have relevant control IDs for the given service
+        if not control_ids:
+            return f"No control IDs found for service: {service}"
+
+        # Prepare prompt template
+        prompt_template = PromptTemplate(
+            input_variables=["dataset_summary", "user_prompt", "service", "control_id"],
+            template="""
+            You are a cloud security expert with access to a dataset of security controls. You are trained upon the dataset to setup & implement security controls.
+
+            Dataset summary: {dataset_summary}
+
+            Based on this dataset and the following user request, generate a detailed Security Control Definition (SCD) for the service: {service}.
+
+            User request: {user_prompt}
+
+            Provide your response in the following format:
+
+            Control ID: {control_id}
+            Control Name: [Name of the control]
+            Implementation Details: [Detailed steps for implementing the control]
+            Responsibility: [Who is responsible for implementing this control]
+            Frequency: [How often should this control be reviewed/implemented]
+            Evidence: [What evidence is required to prove this control is in place]
+            Description: [Brief description of the control]
+
+            Ensure your response is relevant to the user's request prompt and based on the information available in the datasets.
+            """
+        )
+
+        # Create an LLM chain
+        chain = LLMChain(llm=self.model, prompt=prompt_template)
+
+        # Iterate through all control IDs and generate corresponding SCDs
+        scd_responses = []
+        for control_id in control_ids:
+            response = chain.run({
+                "dataset_summary": self.dataset_summary,
+                "user_prompt": user_prompt,
+                "service": service,
+                "control_id": control_id
+            })
+            scd_responses.append(response)
+
+        # Return the list of SCDs generated for the given service
+        return scd_responses
