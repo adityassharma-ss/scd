@@ -1,65 +1,34 @@
-class AIModel:
+class SCDGenerator:
     # ... existing methods ...
 
-    def generate_scd(self, user_prompt, service):
-        """Generate multiple SCDs based on user prompt, dataset, and service."""
-        control_ids = self.control_ids.get(service, [])
-        
-        # Check if we have relevant control IDs for the given service
-        if not control_ids:
-            return f"No control IDs found for service: {service}"
+    def generate_scd(self, user_prompt):
+        """Generate SCD based on user prompt"""
+        if self.dataset is None:
+            return "Error: Dataset not loaded. Please load a dataset first."
 
-        # Prepare prompt template
-        prompt_template = PromptTemplate(
-            input_variables=["dataset_summary", "user_prompt", "service", "control_id"],
-            template="""
-            You are a cloud security expert with access to a dataset of security controls. You are trained upon the dataset to setup & implement security controls.
+        # Extract service from user prompt
+        service = next((s for s in self.dataset['Cloud Service'].unique() if s.lower() in user_prompt.lower()), "Unknown")
 
-            Dataset summary: {dataset_summary}
+        scd_list = self.ai_model.generate_scd(user_prompt, service)
+        return scd_list
 
-            Based on this dataset and the following user request, generate a detailed Security Control Definition (SCD) for the service: {service}.
+    def save_scd(self, scd_list, output_file_path, format='md'):
+        """Save the generated SCD to a file"""
+        if format == 'md':
+            with open(output_file_path, 'w') as f:
+                for scd in scd_list:
+                    f.write(f"## Control ID: {scd.get('Control ID', 'N/A')}\n")
+                    f.write(f"**Control Name**: {scd.get('Control Name', 'N/A')}\n")
+                    f.write(f"**Implementation Details**: {scd.get('Implementation Details', 'N/A')}\n")
+                    f.write(f"**Responsibility**: {scd.get('Responsibility', 'N/A')}\n")
+                    f.write(f"**Frequency**: {scd.get('Frequency', 'N/A')}\n")
+                    f.write(f"**Evidence**: {scd.get('Evidence', 'N/A')}\n")
+                    f.write(f"**Description**: {scd.get('Description', 'N/A')}\n")
+                    f.write("\n---\n")
 
-            User request: {user_prompt}
+        elif format == 'csv':
+            # Flatten the data into rows for CSV
+            df = pd.DataFrame(scd_list)
+            df.to_csv(output_file_path, index=False)
 
-            Provide your response in the following format:
-
-            Control ID: {control_id}
-            Control Name: [Name of the control]
-            Implementation Details: [Detailed steps for implementing the control]
-            Responsibility: [Who is responsible for implementing this control]
-            Frequency: [How often should this control be reviewed/implemented]
-            Evidence: [What evidence is required to prove this control is in place]
-            Description: [Brief description of the control]
-            """
-        )
-
-        # Create an LLM chain
-        chain = LLMChain(llm=self.model, prompt=prompt_template)
-
-        # Iterate through all control IDs and generate corresponding SCDs
-        scd_responses = []
-        for control_id in control_ids:
-            response = chain.invoke({
-                "dataset_summary": self.dataset_summary,
-                "user_prompt": user_prompt,
-                "service": service,
-                "control_id": control_id
-            })
-            # Assuming response is a string formatted as expected
-            scd_data = self._parse_scd_response(response)
-            if scd_data:
-                scd_responses.append(scd_data)
-
-        return scd_responses
-
-    def _parse_scd_response(self, response):
-        """Parse the SCD response into a structured dictionary."""
-        lines = response.split("\n")
-        scd_data = {}
-        
-        for line in lines:
-            if ": " in line:
-                key, value = line.split(": ", 1)
-                scd_data[key.strip()] = value.strip()
-        
-        return scd_data
+        print(f"SCD saved to {output_file_path}")
