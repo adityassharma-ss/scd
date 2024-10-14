@@ -1,34 +1,54 @@
-class SCDGenerator:
-    # ... existing methods ...
+def main():
+    st.title("Cloud Security Control Definition (SCD) App")
 
-    def generate_scd(self, user_prompt):
-        """Generate SCD based on user prompt"""
-        if self.dataset is None:
-            return "Error: Dataset not loaded. Please load a dataset first."
+    # Initialize the SCD Generator
+    if 'scd_generator' not in st.session_state:
+        st.session_state.scd_generator = SCDGenerator()
 
-        # Extract service from user prompt
-        service = next((s for s in self.dataset['Cloud Service'].unique() if s.lower() in user_prompt.lower()), "Unknown")
+    # User input prompt for SCD generation
+    user_prompt = st.text_input("Enter a prompt for SCD generation (e.g., 'Generate Security Control for S3 bucket')")
+    
+    # Select output format
+    output_format = st.selectbox("Select output format", ["Markdown", "CSV"])
 
-        scd_list = self.ai_model.generate_scd(user_prompt, service)
-        return scd_list
-
-    def save_scd(self, scd_list, output_file_path, format='md'):
-        """Save the generated SCD to a file"""
-        if format == 'md':
-            with open(output_file_path, 'w') as f:
+    # Generate SCD report button
+    if st.button("Generate SCD Report"):
+        if user_prompt:
+            scd_list = st.session_state.scd_generator.generate_scd(user_prompt)
+            if isinstance(scd_list, list) and scd_list:
+                st.session_state.scds = scd_list  # Store generated SCDs
                 for scd in scd_list:
-                    f.write(f"## Control ID: {scd.get('Control ID', 'N/A')}\n")
-                    f.write(f"**Control Name**: {scd.get('Control Name', 'N/A')}\n")
-                    f.write(f"**Implementation Details**: {scd.get('Implementation Details', 'N/A')}\n")
-                    f.write(f"**Responsibility**: {scd.get('Responsibility', 'N/A')}\n")
-                    f.write(f"**Frequency**: {scd.get('Frequency', 'N/A')}\n")
-                    f.write(f"**Evidence**: {scd.get('Evidence', 'N/A')}\n")
-                    f.write(f"**Description**: {scd.get('Description', 'N/A')}\n")
-                    f.write("\n---\n")
+                    st.text_area("Generated SCD:", f"Control ID: {scd.get('Control ID')}\n"
+                                                    f"Control Name: {scd.get('Control Name')}\n"
+                                                    f"Implementation Details: {scd.get('Implementation Details')}\n"
+                                                    f"Responsibility: {scd.get('Responsibility')}\n"
+                                                    f"Frequency: {scd.get('Frequency')}\n"
+                                                    f"Evidence: {scd.get('Evidence')}\n"
+                                                    f"Description: {scd.get('Description')}", height=300)
+            else:
+                st.warning("No SCDs generated. Please check your prompt.")
 
-        elif format == 'csv':
-            # Flatten the data into rows for CSV
-            df = pd.DataFrame(scd_list)
-            df.to_csv(output_file_path, index=False)
+    # File name input for saving
+    file_name = st.text_input("Enter file name for SCD (without extension)", "generated_scd")
 
-        print(f"SCD saved to {output_file_path}")
+    # Save and download SCDs
+    if st.button("Save and Download SCDs"):
+        if st.session_state.scds:
+            file_extension = "md" if output_format == "Markdown" else "csv"
+            output_file_path = f"{file_name}.{file_extension}"
+
+            if output_format == "Markdown":
+                st.session_state.scd_generator.save_scd(st.session_state.scds, output_file_path, format='md')
+            else:
+                st.session_state.scd_generator.save_scd(st.session_state.scds, output_file_path, format='csv')
+
+            with open(output_file_path, "rb") as file:
+                st.download_button(
+                    label=f"Download {output_format} File",
+                    data=file,
+                    file_name=output_file_path,
+                    mime="text/plain" if output_format == "Markdown" else "text/csv"
+                )
+            st.success(f"SCDs saved and ready for download as {output_file_path}")
+        else:
+            st.warning("No SCDs generated yet. Generate at least one SCD before saving.")
