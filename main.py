@@ -1,93 +1,82 @@
-import streamlit as st
-import tempfile
-import os
-from src.output.scd_generator import SCDGenerator
+import pandas as pd
+import re
+from src.model.ai_model import AIModel
+from src.data.io_handler import IOHandler
 
-def main():
-    st.title("Cloud Security Control Definition (SCD) App")
+class SCDGenerator:
+    def __init__(self):
+        self.ai_model = AIModel()
+        self.dataset = None
+        self.generated_scds = []  # To keep track of all generated SCDs
 
-    # Initialize the SCD Generator
-    if 'scd_generator' not in st.session_state:
-        st.session_state.scd_generator = SCDGenerator()
+    def load_datasets(self, file_paths):
+        """Load and process the dataset"""
+        self.dataset = IOHandler.load_csv(file_paths)
+        self._summarize_dataset()
 
-    # Initialize session state for storing SCDs
-    if 'scds' not in st.session_state:
-        st.session_state.scds = []
+    def _summarize_dataset(self):
+        """Create a summary of the dataset for the model"""
+        services = self.dataset['Cloud Service'].unique()
+        controls = self.dataset['Control Description'].unique()
+        summary = f"Dataset contains information on {len(services)} cloud services and {len(controls)} controls."
 
-    # Upload CSV file for dataset
-    uploaded_files = st.file_uploader("Upload your dataset (CSV format)", type=["csv"], accept_multiple_files=True)
+        control_ids = {}
+        for _, row in self.dataset.iterrows():
+            service = row['Cloud Service']
+            control_id = row.get('Control ID', f"SCD-{len(control_ids) + 1:03d}")
+            if service not in control_ids:
+                control_ids[service] = control_id
 
-    if uploaded_files:
-        # Save uploaded files to a temporary location
-        temp_file_paths = []
-        for uploaded_file in uploaded_files:
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.csv') as temp_file:
-                temp_file.write(uploaded_file.getvalue())
-                temp_file_paths.append(temp_file.name)
+        self.ai_model.set_dataset_info(summary, control_ids)
 
-        st.session_state.scd_generator.load_datasets(temp_file_paths)
-        st.success("Datasets loaded successfully!")
+    def generate_scd(self, user_prompt):
+        """Generate SCD based on user prompt"""
+        if self.dataset is None:
+            return "Error: Dataset not loaded. Please load a dataset first."
 
-    # User input prompt for SCD generation
-    user_prompt = st.text_input("Enter a prompt for SCD generation (e.g., 'Generate Security Control for S3 bucket')")
+        # Extract service from user prompt (this is a simple approach and might need refinement)
+        service = next((s for s in self.dataset['Cloud Service'].unique() if s.lower() in user_prompt.lower()), "Unknown")
 
-    # Select output format
-    output_format = st.selectbox("Select output format", ["Markdown", "CSV"])
+        scd = self.ai_model.generate_scd(user_prompt, service)
+        
+        # Check for duplicates before adding the new SCD
+        if scd not in self.generated_scds:
+            self.generated_scds.append(scd)  # Keep track of generated SCDs
 
-    # Generate SCD report button
-    if st.button("Generate SCD Report"):
-        if user_prompt:
-            scd = st.session_state.scd_generator.generate_scd(user_prompt)
-            
-            # Ensure the generated SCD is a string before appending
-            if isinstance(scd, list):
-                scd = "\n\n".join(map(str, scd))  # Flatten list into a string
+        return scd
 
-            st.session_state.scds.append(scd)
-            st.text_area("Generated SCD:", scd, height=300)
-        else:
-            st.warning("Please enter a prompt for SCD generation.")
+    def save_scd(self, output_file_path, format='md'):
+        """Save the generated SCDs to a file"""
 
-    # File name input for saving
-    file_name = st.text_input("Enter file name for SCD (without extension)", "generated_scd")
+        if format == 'md':
+            with open(output_file_path, 'w') as f:
+                # Save all SCDs into the Markdown file, joined by "---" as a separator
+                combined_scds = "\n\n---\n\n".join(self.generated_scds)
+                f.write(combined_scds)
 
-    # Clear previous SCDs if a new file name is provided
-    if file_name and st.session_state.get('last_file_name') != file_name:
-        st.session_state.scds = []
-        st.session_state.last_file_name = file_name
+        elif format == 'csv':
+            # Convert the SCDs into CSV format
+            csv_data = []
+            for scd in self.generated_scds:
+                scd_entries = scd.split('\n\n---\n\n')
+                for scd_entry in scd_entries:
+                    entry_data = {}
+                    for line in scd_entry.split('\n'):
+                        if ':' in line:
+                            key, value = line.split(':', 1)
+                            entry_data[key.strip()] = value.strip()
+                        else:
+                            # Check if line starts with numbering (e.g., "1.", "2.", etc.)
+                            if re.match(r'^\d+\.', line.strip()):
+                                if 'Implementation Details' not in entry_data:
+                                    entry_data['Implementation Details'] = line.strip()
+                                else:
+                                    entry_data['Implementation Details'] += ' ' + line.strip()
 
-    # Save and download SCDs
-    if st.button("Save and Download SCDs"):
-        if st.session_state.scds:
-            file_extension = "md" if output_format == "Markdown" else "csv"
-            output_file_path = f"{file_name}.{file_extension}"
+                    csv_data.append(entry_data)
 
-            # Ensure each SCD is a string before joining
-            scds = []
-            for scd in st.session_state.scds:
-                if isinstance(scd, list):
-                    scd_str = "\n\n".join(map(str, scd))  # Flatten list into a string
-                    scds.append(scd_str)
-                else:
-                    scds.append(str(scd))
+            # Save all the CSV data at once
+            df = pd.DataFrame(csv_data)
+            df.to_csv(output_file_path, index=False)
 
-            # Join all the SCDs
-            combined_scd = "\n\n---\n\n".join(scds)
-
-            st.session_state.scd_generator.save_scd(combined_scd, output_file_path, format=file_extension)
-
-            # Download button for the saved file
-            with open(output_file_path, "rb") as file:
-                st.download_button(
-                    label=f"Download {output_format} File",
-                    data=file,
-                    file_name=output_file_path,
-                    mime="text/plain" if output_format == "Markdown" else "text/csv"
-                )
-
-            st.success(f"SCDs saved and ready for download as {output_file_path}")
-        else:
-            st.warning("No SCDs generated yet. Generate at least one SCD before saving.")
-
-if __name__ == "__main__":
-    main()
+            print(f"SCD saved to {output_file_path}")
