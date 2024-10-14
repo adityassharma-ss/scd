@@ -1,65 +1,71 @@
 import pandas as pd
 import re
+from src.model.ai_model import AIModel
+from src.data.io_handler import IOHandler
 
-class IOHandler:
-    @staticmethod
-    def load_csv(file_paths):
-        """Loads cloud control data from multiple dataset files."""
-        dataframes = []
-        for file_path in file_paths:
-            try:
-                df = pd.read_csv(file_path)
-                dataframes.append(df)
-            except FileNotFoundError:
-                raise FileNotFoundError(f"File not found: {file_path}")
+class SCDGenerator:
+    """Load and process the dataset"""
 
-        # Combine all datasets into one
-        if dataframes:
-            return pd.concat(dataframes, ignore_index=True)
+    def __init__(self):
+        self.ai_model = AIModel()
+        self.dataset = None
 
-        return None
+    def load_datasets(self, file_paths):
+        """Load datasets from provided file paths."""
+        self.dataset = IOHandler.load_csv(file_paths)
+        self.summarize_dataset()
 
-    @staticmethod
-    def save_output(output_data, output_file_path):
-        """Saves the generated SCD to an output file."""
-        with open(output_file_path, 'w') as f:
-            for control in output_data:
-                f.write(f"## Cloud Service: {control['cloud_service']}\n")
-                f.write(f"### Control ID: {control['control_id']}\n")
-                f.write(f"### Control Description: {control['control_description']}\n")
-                f.write(f"Implementation Details: \n")
-                for detail in control['implementation_details']:
-                    f.write(f"- {detail}\n")
-                f.write(f"\n\n")
-        print(f"SCD Report saved to {output_file_path}")
+    def summarize_dataset(self):
+        """Create a summary of the dataset for the model."""
+        services = self.dataset['Cloud Service'].unique()
+        controls = self.dataset['Control Description'].unique()
+        summary = f"Dataset contains information on {len(services)} cloud services and {len(controls)} controls."
+        control_ids = {}
 
-    @staticmethod
-    def save_to_csv(data, file_path):
-        """Save data to a CSV file, ensuring that implementation details are split into rows."""
-        rows = []
-        for row in data:
-            # Use regex to split on number patterns (e.g., "1.", "2.", "3.")
-            implementation_details = re.split(r'(?<=\d)\.\s*', row['Implementation Details'])  # Split by digits followed by a period
-            for detail in implementation_details:
-                new_row = row.copy()
-                new_row['Implementation Details'] = detail.strip()
-                rows.append(new_row)
+        for idx, row in self.dataset.iterrows():
+            service = row['Cloud Service']
+            control_id = row.get('Control ID', f"SCD-{len(control_ids) + 1:03d}")
+            if service not in control_ids:
+                control_ids[service] = [control_id]  # List to hold multiple IDs
+            else:
+                control_ids[service].append(control_id)
 
-        df = pd.DataFrame(rows)
-        df.to_csv(file_path, index=False)
-        print(f"Data saved to {file_path}")
+        self.ai_model.set_dataset_info(summary, control_ids)
 
-    @staticmethod
-    def save_to_md(data, file_path):
-        """Save data to a Markdown file, ensuring that implementation details are split."""
-        with open(file_path, 'w') as md_file:
-            for row in data:
-                md_file.write(f"## {row['Control ID']} {row['Cloud Service']}\n")
-                md_file.write(f"**Category**: {row['Category']}\n")
-                md_file.write(f"**Control Description**: {row['Control Description']}\n")
-                implementation_details = re.split(r'(?<=\d)\.\s*', row['Implementation Details'])
-                md_file.write("### Implementation Details: \n")
-                for detail in implementation_details:
-                    md_file.write(f"- {detail.strip()}\n")
-                md_file.write("\n---\n")
-        print(f"Data saved to {file_path}")
+    def generate_scd(self, user_prompt):
+        """Generate SCD based on user prompt."""
+        if self.dataset is None:
+            return "Error: Dataset not loaded. Please load a dataset first."
+
+        service = next((s for s in self.dataset['Cloud Service'].unique() if s.lower() in user_prompt.lower()), "Unknown")
+        return self.ai_model.generate_scd(user_prompt, service)
+
+    def save_scd(self, scd, output_file_path, format='md'):
+        """Save the generated SCD to an output file."""
+        if format == 'md':
+            with open(output_file_path, 'w') as f:
+                f.write(scd)
+        elif format == 'csv':
+            # Convert SCD to CSV format
+            scds = scd.split('\n\n---\n\n')
+            csv_data = []
+            for scd_entry in scds:
+                entry_data = {}
+                impl_details = []  # To hold multiple lines of implementation details
+                for line in scd_entry.split('\n'):
+                    if ':' in line:
+                        key, value = line.split(':', 1)
+                        entry_data[key.strip()] = value.strip()
+                    else:
+                        if re.match(r'^\d+\.', line.strip()):  # Check if line starts with numbering
+                            impl_details.append(line.strip())
+                
+                # Add a new row for each line in Implementation Details
+                for detail in impl_details:
+                    temp_entry = entry_data.copy()  # Copy the other fields
+                    temp_entry['Implementation Details'] = detail  # Add one implementation detail per row
+                    csv_data.append(temp_entry)
+
+            df = pd.DataFrame(csv_data)
+            df.to_csv(output_file_path, index=False)
+            print(f"SCD saved to {output_file_path}")
