@@ -1,68 +1,24 @@
-# main.py
-import streamlit as st
-import tempfile
-import os
-from src.output.scd_generator import SCDGenerator
+# AWS IAM User Activity Tracker 📊
 
-def main():
-    st.title("Cloud Security Control Definition (SCD) Generator")
+[![Python Version](https://img.shields.io/badge/python-3.x-blue.svg)](https://www.python.org/)
+[![Boto3](https://img.shields.io/badge/Boto3-Library-orange)](https://boto3.amazonaws.com/v1/documentation/api/latest/index.html)
+[![AWS](https://img.shields.io/badge/AWS-CloudTrail%20|%20IAM-yellow)](https://aws.amazon.com/)
 
-    # Initialize the SCD Generator
-    if 'scd_generator' not in st.session_state:
-        st.session_state.scd_generator = SCDGenerator()
+This Python script automates the process of listing all IAM users in your AWS account and analyzing their activities over the past 90 days. Leveraging **AWS CloudTrail**, it tracks how often users access AWS and outputs relevant information for auditing purposes.
 
-    # Initialize session state for storing SCDs
-    if 'scds' not in st.session_state:
-        st.session_state.scds = []
+## ✨ Features
 
-    # Upload CSV file for dataset
-    uploaded_files = st.file_uploader("Upload your dataset (CSV format)", type=["csv"], accept_multiple_files=True)
+- **List All IAM Users**: Retrieve all IAM users in your AWS account.
+- **Track User Activity**: Analyze CloudTrail logs to see which users have performed actions in the last 90 days.
+- **Time-based Analysis**: Define custom time periods to audit user activity.
+- **CSV Output**: (Upcoming feature) Export results to CSV for reporting.
 
-    if uploaded_files:
-        # Save uploaded files to a temporary location
-        temp_file_paths = []
-        for uploaded_file in uploaded_files:
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.csv') as temp_file:
-                temp_file.write(uploaded_file.getvalue())
-                temp_file_paths.append(temp_file.name)
+## 🛠️ Installation
 
-        # Load datasets into the SCD generator
-        st.session_state.scd_generator.load_datasets(temp_file_paths)
+### Prerequisites
+- Python 3.x
+- AWS credentials configured via environment variables or `aws configure` command.
+- Install the required Python packages:
 
-        # Remove temporary files after loading
-        for temp_file_path in temp_file_paths:
-            os.remove(temp_file_path)
-
-        st.success("Datasets loaded successfully!")
-
-    # User input for generating SCDs
-    user_prompt = st.text_area("Enter your request for generating Security Control Definitions (SCD):")
-    if st.button("Generate SCD"):
-        if user_prompt:
-            scd = st.session_state.scd_generator.generate_scd(user_prompt)
-            st.session_state.scds.append(scd)
-            st.success("SCD generated successfully!")
-
-            # Display generated SCD
-            st.subheader("Generated SCD:")
-            st.write(scd)
-
-            # Option to save the SCD
-            if st.button("Save SCD"):
-                output_format = st.selectbox("Select output format", ["Markdown", "CSV"])
-                output_file = st.text_input("Enter output file name", "scd_output")
-
-                if st.button("Download"):
-                    if output_format == "Markdown":
-                        output_file_path = f"{output_file}.md"
-                        st.session_state.scd_generator.save_scd(scd, output_file_path, format='md')
-                        with open(output_file_path, "r") as f:
-                            st.download_button("Download Markdown", f, file_name=output_file_path)
-                    elif output_format == "CSV":
-                        output_file_path = f"{output_file}.csv"
-                        st.session_state.scd_generator.save_scd(scd, output_file_path, format='csv')
-                        with open(output_file_path, "r") as f:
-                            st.download_button("Download CSV", f, file_name=output_file_path)
-
-if __name__ == "__main__":
-    main()
+```bash
+pip install -r requirements.txt
