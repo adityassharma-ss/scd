@@ -1,71 +1,68 @@
-import pandas as pd
-import re
-from src.model.ai_model import AIModel
-from src.data.io_handler import IOHandler
+# main.py
+import streamlit as st
+import tempfile
+import os
+from src.output.scd_generator import SCDGenerator
 
-class SCDGenerator:
-    """Load and process the dataset"""
+def main():
+    st.title("Cloud Security Control Definition (SCD) Generator")
 
-    def __init__(self):
-        self.ai_model = AIModel()
-        self.dataset = None
+    # Initialize the SCD Generator
+    if 'scd_generator' not in st.session_state:
+        st.session_state.scd_generator = SCDGenerator()
 
-    def load_datasets(self, file_paths):
-        """Load datasets from provided file paths."""
-        self.dataset = IOHandler.load_csv(file_paths)
-        self.summarize_dataset()
+    # Initialize session state for storing SCDs
+    if 'scds' not in st.session_state:
+        st.session_state.scds = []
 
-    def summarize_dataset(self):
-        """Create a summary of the dataset for the model."""
-        services = self.dataset['Cloud Service'].unique()
-        controls = self.dataset['Control Description'].unique()
-        summary = f"Dataset contains information on {len(services)} cloud services and {len(controls)} controls."
-        control_ids = {}
+    # Upload CSV file for dataset
+    uploaded_files = st.file_uploader("Upload your dataset (CSV format)", type=["csv"], accept_multiple_files=True)
 
-        for idx, row in self.dataset.iterrows():
-            service = row['Cloud Service']
-            control_id = row.get('Control ID', f"SCD-{len(control_ids) + 1:03d}")
-            if service not in control_ids:
-                control_ids[service] = [control_id]  # List to hold multiple IDs
-            else:
-                control_ids[service].append(control_id)
+    if uploaded_files:
+        # Save uploaded files to a temporary location
+        temp_file_paths = []
+        for uploaded_file in uploaded_files:
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.csv') as temp_file:
+                temp_file.write(uploaded_file.getvalue())
+                temp_file_paths.append(temp_file.name)
 
-        self.ai_model.set_dataset_info(summary, control_ids)
+        # Load datasets into the SCD generator
+        st.session_state.scd_generator.load_datasets(temp_file_paths)
 
-    def generate_scd(self, user_prompt):
-        """Generate SCD based on user prompt."""
-        if self.dataset is None:
-            return "Error: Dataset not loaded. Please load a dataset first."
+        # Remove temporary files after loading
+        for temp_file_path in temp_file_paths:
+            os.remove(temp_file_path)
 
-        service = next((s for s in self.dataset['Cloud Service'].unique() if s.lower() in user_prompt.lower()), "Unknown")
-        return self.ai_model.generate_scd(user_prompt, service)
+        st.success("Datasets loaded successfully!")
 
-    def save_scd(self, scd, output_file_path, format='md'):
-        """Save the generated SCD to an output file."""
-        if format == 'md':
-            with open(output_file_path, 'w') as f:
-                f.write(scd)
-        elif format == 'csv':
-            # Convert SCD to CSV format
-            scds = scd.split('\n\n---\n\n')
-            csv_data = []
-            for scd_entry in scds:
-                entry_data = {}
-                impl_details = []  # To hold multiple lines of implementation details
-                for line in scd_entry.split('\n'):
-                    if ':' in line:
-                        key, value = line.split(':', 1)
-                        entry_data[key.strip()] = value.strip()
-                    else:
-                        if re.match(r'^\d+\.', line.strip()):  # Check if line starts with numbering
-                            impl_details.append(line.strip())
-                
-                # Add a new row for each line in Implementation Details
-                for detail in impl_details:
-                    temp_entry = entry_data.copy()  # Copy the other fields
-                    temp_entry['Implementation Details'] = detail  # Add one implementation detail per row
-                    csv_data.append(temp_entry)
+    # User input for generating SCDs
+    user_prompt = st.text_area("Enter your request for generating Security Control Definitions (SCD):")
+    if st.button("Generate SCD"):
+        if user_prompt:
+            scd = st.session_state.scd_generator.generate_scd(user_prompt)
+            st.session_state.scds.append(scd)
+            st.success("SCD generated successfully!")
 
-            df = pd.DataFrame(csv_data)
-            df.to_csv(output_file_path, index=False)
-            print(f"SCD saved to {output_file_path}")
+            # Display generated SCD
+            st.subheader("Generated SCD:")
+            st.write(scd)
+
+            # Option to save the SCD
+            if st.button("Save SCD"):
+                output_format = st.selectbox("Select output format", ["Markdown", "CSV"])
+                output_file = st.text_input("Enter output file name", "scd_output")
+
+                if st.button("Download"):
+                    if output_format == "Markdown":
+                        output_file_path = f"{output_file}.md"
+                        st.session_state.scd_generator.save_scd(scd, output_file_path, format='md')
+                        with open(output_file_path, "r") as f:
+                            st.download_button("Download Markdown", f, file_name=output_file_path)
+                    elif output_format == "CSV":
+                        output_file_path = f"{output_file}.csv"
+                        st.session_state.scd_generator.save_scd(scd, output_file_path, format='csv')
+                        with open(output_file_path, "r") as f:
+                            st.download_button("Download CSV", f, file_name=output_file_path)
+
+if __name__ == "__main__":
+    main()
