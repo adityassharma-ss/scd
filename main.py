@@ -1,23 +1,16 @@
-prompt_template = PromptTemplate(
-    input_variables=["dataset_summary", "user_prompt", "service", "control_id"],
-    template="""
-    You are a cloud security expert with access to a dataset of security controls. Based on this dataset, generate 10-12 detailed Security Control Definitions (SCDs) relevant to the following cloud service: {service}. 
+def generate_scd(self, user_prompt):
+    """Generate multiple SCDs based on user prompt"""
+    if self.dataset is None:
+        return "Error: Dataset not loaded. Please load a dataset first."
 
-    Please ensure that the control names reflect common security practices and that the descriptions and implementation details are comprehensive.
+    # Extract service from user prompt (this is a simple approach and might need refinement)
+    service = next((s for s in self.dataset['Cloud Service'].unique() if s.lower() in user_prompt.lower()), "Unknown")
 
-    Dataset summary: {dataset_summary}
-
-    User request: {user_prompt}
-
-    Provide your response in the following format:
-    Control ID: {control_id}
-    Control Name: [Name of the control]
-    Description: [Brief description of the control]
-    Implementation Details: [Detailed steps for implementing the control]
-    Responsibility: [Who is responsible for implementing this control]
-    Frequency: [How often should this control be reviewed/implemented]
-    Evidence: [What evidence is required to prove this control is in place]
-
-    Ensure your response is relevant to the user's request prompt and based on the information available in the datasets.
-    """
-)
+    # Request multiple SCDs from the AI model
+    scds = []
+    for i in range(10):  # Change this number to generate the desired amount of SCDs
+        control_id = f"{service[:3].upper()}-{i + 1}"  # Use the first three letters of the service for ID
+        scd = self.ai_model.generate_scd(user_prompt, service, control_id)
+        scds.append(scd)
+    
+    return "\n\n---\n\n".join(scds)  # Combine the SCDs for consistent output
