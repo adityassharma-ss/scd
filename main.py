@@ -1,7 +1,7 @@
 import streamlit as st
 import tempfile
-from src.output.scd_generator import SCDGenerator
 import os
+from src.output.scd_generator import SCDGenerator
 
 def main():
     st.title("Cloud Security Control Definition (SCD) App")
@@ -50,6 +50,11 @@ def main():
 
     # File name input for saving
     file_name = st.text_input("Enter file name for SCD (without extension)", "generated_scd")
+
+    # Clear previous SCDs if a new file name is provided
+    if file_name and st.session_state.get('last_file_name') != file_name:
+        st.session_state.scds = []
+        st.session_state.last_file_name = file_name
 
     # Save and download SCDs
     if st.button("Save and Download SCDs"):
