@@ -1,87 +1,74 @@
-import pandas as pd
-import re
-from src.data.io_handler import IOHandler
+import streamlit as st
+import tempfile
+import os
+from src.output.scd_generator import SCDGenerator
 
-class SCDGenerator:
+def main():
+    st.title("Cloud Security Control Definition (SCD) App")
 
-    def __init__(self):
-        self.ai_model = AIModel()
-        self.dataset = None
+    # Initialize the SCD Generator
+    if 'scd_generator' not in st.session_state:
+        st.session_state.scd_generator = SCDGenerator()
 
-    def load_datasets(self, file_paths):
-        """Load and process the dataset"""
-        self.dataset = IOHandler.load_csv(file_paths)
-        self._summarize_dataset()
+    # Initialize session state for storing SCDs
+    if 'scds' not in st.session_state:
+        st.session_state.scds = []
 
-    def _summarize_dataset(self):
-        """Create a summary of the dataset for the model"""
-        services = self.dataset['Cloud Service'].unique()
-        controls = self.dataset['Control Description'].unique()
-        summary = f"Dataset contains information on {len(services)} cloud services and {len(controls)} controls."
-        control_ids = {}
-        for _, row in self.dataset.iterrows():
-            service = row['Cloud Service']
-            control_id = row.get('Control ID', f"SCD-{len(control_ids) + 1:03d}")
-            if service not in control_ids:
-                control_ids[service] = control_id
-        self.ai_model.set_dataset_info(summary, control_ids)
+    # Upload CSV file for dataset
+    uploaded_files = st.file_uploader("Upload your dataset (CSV format)", type=["csv"], accept_multiple_files=True)
 
-    def generate_scd(self, user_prompt):
-        """Generate SCD based on user prompt"""
-        if self.dataset is None:
-            return "Error: Dataset not loaded. Please load a dataset first."
-        
-        service = next((s for s in self.dataset['Cloud Service'].unique() if s.lower() in user_prompt.lower()), None)
-        return self.ai_model.generate_scd(user_prompt, service)
+    if uploaded_files:
+        # Save uploaded files to a temporary location
+        temp_file_paths = []
+        for uploaded_file in uploaded_files:
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.csv') as temp_file:
+                temp_file.write(uploaded_file.getvalue())
+                temp_file_paths.append(temp_file.name)
 
-    def save_scd(self, scd, output_file_path, format='md'):
-        """Save SCD to the selected file format"""
-        if format == 'md':
-            with open(output_file_path, 'a') as f:
-                f.write(scd)
-        elif format == 'csv':
-            scd_entries = scd.strip().split('\n\n')
-            csv_data = []
-            for scd_entry in scd_entries:
-                entry_data = {}
-                implementation_details = []
-                for line in scd_entry.split('\n'):
-                    if ': ' in line:
-                        key, value = line.split(':', 1)
-                        key = key.strip()
-                        value = value.strip()
-                        if key == 'Implementation Details':
-                            implementation_details.append(value)
-                        else:
-                            entry_data[key] = value
-                if implementation_details:
-                    entry_data['Implementation Details'] = ' | '.join(implementation_details)
-                else:
-                    entry_data['Implementation Details'] = ''
-                csv_data.append(entry_data)
-            
-            IOHandler.save_to_csv(csv_data, output_file_path)
-        elif format == 'xlsx':
-            scd_entries = scd.strip().split('\n\n')
-            xlsx_data = []
-            for scd_entry in scd_entries:
-                entry_data = {}
-                implementation_details = []
-                for line in scd_entry.split('\n'):
-                    if ': ' in line:
-                        key, value = line.split(':', 1)
-                        key = key.strip()
-                        value = value.strip()
-                        if key == 'Implementation Details':
-                            implementation_details.append(value)
-                        else:
-                            entry_data[key] = value
-                if implementation_details:
-                    entry_data['Implementation Details'] = ' | '.join(implementation_details)
-                else:
-                    entry_data['Implementation Details'] = ''
-                xlsx_data.append(entry_data)
-            
-            IOHandler.save_to_xlsx(xlsx_data, output_file_path)
-        
-        print(f"SCD saved to {output_file_path}")
+        # Load the datasets
+        st.session_state.scd_generator.load_datasets(temp_file_paths)
+        st.success("Datasets loaded successfully!")
+
+    # User input prompt for SCD generation
+    user_prompt = st.text_input("Enter a prompt for SCD generation (e.g., 'Generate Security Control for S3 bucket')")
+
+    # Select output format
+    output_format = st.selectbox("Select output format", ["Markdown", "CSV", "XLSX"])
+
+    # Generate SCD report button
+    if st.button("Generate SCD Report"):
+        if user_prompt:
+            scd = st.session_state.scd_generator.generate_scd(user_prompt)
+            st.session_state.scds.append(scd)
+            st.text_area("Generated SCD:", scd, height=300)
+        else:
+            st.warning("Please enter a prompt for SCD generation.")
+
+    # File name input for saving
+    file_name = st.text_input("Enter file name for SCD (without extension)", "generated_scd")
+
+    # If SCDs are generated, allow saving
+    if st.session_state.scds:
+        file_extension = "csv" if output_format == "CSV" else "md" if output_format == "Markdown" else "xlsx"
+        output_file_path = f"{file_name}.{file_extension}"
+
+        # Combine all SCDs into one string for saving
+        combined_scd = "\n\n---\n\n".join(st.session_state.scds)
+
+        # Save the file based on the format selected
+        st.session_state.scd_generator.save_scd(combined_scd, output_file_path, format=file_extension)
+
+        with open(output_file_path, "rb") as file:
+            st.download_button(
+                label=f"Download {output_format} File",
+                data=file,
+                file_name=output_file_path,
+                mime="text/plain" if output_format == "Markdown" else "text/csv" if output_format == "CSV" else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+
+        st.success(f"SCDs saved and ready for download as {output_file_path}")
+    else:
+        st.warning("No SCDs generated yet. Generate at least one SCD before saving.")
+
+if __name__ == "__main__":
+    main()
