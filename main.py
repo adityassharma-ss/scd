@@ -1,77 +1,49 @@
-import streamlit as st
-import tempfile
-import os
-from src.output.scd_generator import SCDGenerator
+import openai
+from src.utils.config import Config
 
-def main():
-    st.title("Cloud Security Control Definition (SCDs) App")
+class CostEstimator:
+    def __init__(self):
+        # Initialize the OpenAI API key from config
+        self.config = Config()
+        openai.api_key = self.config.get_openai_api_key()
 
-    # Initialize the SCD Generator
-    if 'scd_generator' not in st.session_state:
-        st.session_state.scd_generator = SCDGenerator()
+        # Define cost per 1k tokens for each model
+        self.pricing = {
+            "gpt-4": {
+                "prompt_cost_per_1k": 0.03, 
+                "completion_cost_per_1k": 0.06
+            },
+            "gpt-3.5": {
+                "prompt_cost_per_1k": 0.002, 
+                "completion_cost_per_1k": 0.002
+            }
+        }
 
-    # Initialize session state for storing SCDs
-    if 'scds' not in st.session_state:
-        st.session_state.scds = []
+    def estimate_cost(self, prompt_text, model="gpt-4", expected_completion_length=300):
+        """Estimate the token usage and cost for a given prompt and completion length."""
 
-    # Upload CSV file for dataset
-    uploaded_files = st.file_uploader("Upload your dataset (CSV format)", type=["csv"], accept_multiple_files=True)
-
-    if uploaded_files:
-        # Save uploaded files to a temporary location
-        temp_file_paths = []
-        for uploaded_file in uploaded_files:
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.csv') as temp_file:
-                temp_file.write(uploaded_file.getvalue())
-                temp_file_paths.append(temp_file.name)
-
-        # Load the datasets
-        st.session_state.scd_generator.load_datasets(temp_file_paths)
-        st.success("Datasets loaded successfully!")
-
-    # User input prompt for SCD generation
-    user_prompt = st.text_input("Enter a prompt for SCD generation (e.g., 'Generate all the Security Control Definition'):")
-
-    # Select output format after the SCD generation
-    output_format = st.selectbox("Select output format", ["Markdown", "CSV", "XLSX"])
-
-    # Generate SCD report button
-    if st.button("Generate SCD Report"):
-        if user_prompt:
-            scd = st.session_state.scd_generator.generate_scd(user_prompt)
-            st.session_state.scds.append(scd)
-            st.text_area("Generated SCD:", scd, height=300)
-        else:
-            st.warning("Please enter a prompt for SCD generation.")
-
-    # File name input for saving
-    file_name = st.text_input("Enter file name for SCD (without extension)", "generated_scd")
-
-    # Download button will only appear if SCDs have been generated
-    if st.session_state.scds:
-        # Combine SCDs into one string
-        combined_scd = "\n\n--\n\n".join(st.session_state.scds)
-
-        # Determine file extension based on the format selected
-        file_extension = "csv" if output_format == "CSV" else "md" if output_format == "Markdown" else "xlsx"
-        output_file_path = f"{file_name}.{file_extension}"
-
-        # Save the SCDs to the specified format
-        st.session_state.scd_generator.save_scd(combined_scd, output_file_path, format=file_extension)
-
-        # Open the file in binary mode to handle the download
-        with open(output_file_path, "rb") as file:
-            st.download_button(
-                label=f"Download {output_format} File",
-                data=file,
-                file_name=output_file_path,
-                mime="text/markdown" if output_format == "Markdown" else "text/csv" if output_format == "CSV" else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        try:
+            # Get the token usage from OpenAI's API (this will simulate cost estimation)
+            response = openai.Completion.create(
+                model=model,
+                prompt=prompt_text,
+                max_tokens=expected_completion_length,
+                temperature=0  # We are not interested in varying results
             )
 
-        st.success(f"SCDs saved and ready for download as {output_file_path}")
+            prompt_tokens = response['usage']['prompt_tokens']
+            completion_tokens = response['usage']['completion_tokens']
 
-        # Clear session state after download
-        st.session_state.scds = []
+            # Calculate total cost for prompt and completion
+            prompt_cost = (prompt_tokens / 1000) * self.pricing[model]['prompt_cost_per_1k']
+            completion_cost = (completion_tokens / 1000) * self.pricing[model]['completion_cost_per_1k']
+            total_cost = prompt_cost + completion_cost
 
-if __name__ == "__main__":
-    main()
+            return {
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens,
+                "total_cost": total_cost
+            }
+
+        except Exception as e:
+            return {"error": str(e)}
