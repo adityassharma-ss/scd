@@ -1,5 +1,6 @@
 import streamlit as st
-import tempfile
+import pandas as pd
+import io
 from src.output.scd_generator import SCDGenerator
 
 def main():
@@ -48,20 +49,44 @@ def main():
     # Download button will only appear if SCDs have been generated
     if st.session_state.scds:
         combined_scd = "\n\n--\n\n".join(st.session_state.scds)
-        file_extension = "csv" if output_format == "CSV" else "md" if output_format == "Markdown" else "xlsx"
-        output_file_path = f"{file_name}.{file_extension}"
 
-        st.download_button(
-            label=f"Download {output_format} File",
-            data=combined_scd.encode('utf-8'),
-            file_name=output_file_path,
-            mime="text/markdown" if output_format == "Markdown" else "text/csv" if output_format == "CSV" else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
+        if output_format == "CSV":
+            # Create a CSV file
+            df = pd.DataFrame({'SCD': st.session_state.scds})
+            csv_data = df.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label="Download CSV File",
+                data=csv_data,
+                file_name=f"{file_name}.csv",
+                mime="text/csv"
+            )
 
-        st.success(f"File ready for download as {output_file_path}")
+        elif output_format == "XLSX":
+            # Create an XLSX file
+            df = pd.DataFrame({'SCD': st.session_state.scds})
+            output = io.BytesIO()
+            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                df.to_excel(writer, index=False)
+            xlsx_data = output.getvalue()
+            st.download_button(
+                label="Download XLSX File",
+                data=xlsx_data,
+                file_name=f"{file_name}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
 
-        # Clear session state after download
+        else:
+            # Markdown format
+            st.download_button(
+                label="Download Markdown File",
+                data=combined_scd.encode('utf-8'),
+                file_name=f"{file_name}.md",
+                mime="text/markdown"
+            )
+
+        st.success(f"File ready for download as {file_name}.{output_format.lower()}")
         st.session_state.scds = []
+
 
 if __name__ == "__main__":
     main()
