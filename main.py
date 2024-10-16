@@ -1,7 +1,5 @@
 import streamlit as st
 import tempfile
-import openai
-from src.cost.cost_estimator import CostEstimator
 from src.output.scd_generator import SCDGenerator
 
 def main():
@@ -35,16 +33,6 @@ def main():
     # Select output format after the SCD generation
     output_format = st.selectbox("Select output format", ["Markdown", "CSV", "XLSX"])
 
-    # Estimate cost before generating SCD
-    cost_estimator = CostEstimator()
-    cost_info = cost_estimator.estimate_cost(user_prompt, model="gpt-4")
-
-    if 'error' in cost_info:
-        st.warning(f"Error estimating cost: {cost_info['error']}")
-    else:
-        st.info(f"Estimated cost: ${cost_info['total_cost']:.4f} for {cost_info['prompt_tokens']} prompt tokens "
-                f"and {cost_info['completion_tokens']} completion tokens.")
-
     # Generate SCD report button
     if st.button("Generate SCD Report"):
         if user_prompt:
@@ -70,7 +58,7 @@ def main():
             mime="text/markdown" if output_format == "Markdown" else "text/csv" if output_format == "CSV" else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
 
-        st.success(f"SCDs saved and ready for download as {output_file_path}")
+        st.success(f"File ready for download as {output_file_path}")
 
         # Clear session state after download
         st.session_state.scds = []
