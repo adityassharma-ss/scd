@@ -1,81 +1,43 @@
-import streamlit as st
-import tempfile
+from src.data.io_handler import IOHandler
+from src.utils.config import Config
+from langchain_openai import ChatOpenAI
+from langchain.embeddings import OpenAIEmbeddings
+from langchain.vectorstores import FAISS
 import os
-from scd_generator import SCDGenerator  # Assuming you have this class defined in a separate file
 
-# Initialize session state
-if 'scd_generator' not in st.session_state:
-    st.session_state.scd_generator = SCDGenerator()
-if 'scds' not in st.session_state:
-    st.session_state.scds = []
+class ModelTrainer:
+    def __init__(self):
+        self.config = Config()
+        self.model = ChatOpenAI(api_key=self.config.get_openai_api_key(), temperature=0.7)
+        self.embeddings = OpenAIEmbeddings(api_key=self.config.get_openai_api_key())
+        self.vector_store = None
 
-def main():
-    st.title("SCD Generator")
-
-    # Load the datasets
-    uploaded_files = st.file_uploader("Upload your dataset (CSV format)", type=["csv"], accept_multiple_files=True)
-    
-    if uploaded_files:
-        # Save uploaded files to a temporary location
-        temp_file_paths = []
-        for uploaded_file in uploaded_files:
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.csv') as temp_file:
-                temp_file.write(uploaded_file.getvalue())
-                temp_file_paths.append(temp_file.name)
+    def train(self):
+        # Load all CSV files from the dataSource directory
+        data_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'dataSource')
+        csv_files = [os.path.join(data_dir, f) for f in os.listdir(data_dir) if f.endswith('.csv')]
         
-        st.session_state.scd_generator.load_datasets(temp_file_paths)
-        st.success("Datasets loaded successfully!")
+        dataset = IOHandler.load_csv(csv_files)
+        
+        # Prepare the data for embedding
+        texts = dataset['Control Description'].tolist()
+        metadatas = dataset.to_dict('records')
+        
+        # Create and save the vector store
+        self.vector_store = FAISS.from_texts(texts, self.embeddings, metadatas=metadatas)
+        
+        # Save the vector store
+        vector_store_path = os.path.join(os.path.dirname(__file__), 'vector_store')
+        self.vector_store.save_local(vector_store_path)
 
-    # User input prompt for SCD generation
-    user_prompt = st.text_input("Enter a prompt for SCD generation (e.g., 'Generate all the Security Control Definitions for aws s3')")
-
-    # Select output format
-    output_format = st.selectbox("Select output format", ["XLSX", "Markdown", "CSV"])
-
-    # Generate SCD report button
-    if st.button("Generate SCD Report"):
-        if user_prompt:
-            try:
-                scd = st.session_state.scd_generator.generate_scd(user_prompt)
-                st.session_state.scds.append(scd)
-                st.text_area("Generated SCD:", scd, height=300)
-            except Exception as e:
-                st.error(f"Error generating SCD: {str(e)}")
+    def load_trained_model(self):
+        vector_store_path = os.path.join(os.path.dirname(__file__), 'vector_store')
+        if os.path.exists(vector_store_path):
+            self.vector_store = FAISS.load_local(vector_store_path, self.embeddings)
         else:
-            st.warning("Please enter a prompt for SCD generation.")
+            raise FileNotFoundError("Trained model not found. Please run the training process first.")
 
-    # File name input for saving
-    file_name = st.text_input("Enter file name for SCD (without extension)", "generated_scd")
-
-    # Combined Save and Download SCDs
-    if st.button("Save and Download SCDs"):
-        if st.session_state.scds:
-            # Determine file extension based on the format selected
-            file_extension = "csv" if output_format == "CSV" else "md" if output_format == "Markdown" else "xlsx"
-            output_file_path = f"{file_name}.{file_extension}"
-
-            # Combine SCDs into one string
-            combined_scd = "\n\n--\n\n".join(st.session_state.scds)
-
-            try:
-                # Save the SCDs
-                st.session_state.scd_generator.save_scd(combined_scd, output_file_path, format=file_extension)
-
-                # Open the file in binary mode to handle the download
-                with open(output_file_path, "rb") as file:
-                    st.download_button(
-                        label=f"Download {output_format} File",
-                        data=file,
-                        file_name=output_file_path,
-                        mime="text/markdown" if output_format == "Markdown" else "text/csv" if output_format == "CSV" else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    )
-
-                st.success(f"SCDs saved and ready for download as {output_file_path}")
-                st.session_state.scds = []  # Clear the SCDs after saving and downloading
-            except Exception as e:
-                st.error(f"Error saving and downloading SCDs: {str(e)}")
-        else:
-            st.warning("No SCDs generated yet. Generate at least one SCD before saving and downloading.")
-
-if __name__ == "__main__":
-    main()
+    def get_vector_store(self):
+        if self.vector_store is None:
+            self.load_trained_model()
+        return self.vector_store
