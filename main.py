@@ -20,11 +20,22 @@ class IOHandler:
                 except Exception as e:
                     print(f"Error reading file {file_path}: {str(e)}")
                     continue
+            
+            # Ensure 'Control Description' column exists
+            if 'Control Description' not in df.columns:
+                print(f"Warning: 'Control Description' column not found in {file_path}. Skipping this file.")
+                continue
+            
             dataframes.append(df)
 
         # Combine all datasets into one
         if dataframes:
-            return pd.concat(dataframes, ignore_index=True)
+            combined_df = pd.concat(dataframes, ignore_index=True)
+            # Ensure all necessary columns exist
+            for col in ['Control ID', 'Control Name', 'Control Description']:
+                if col not in combined_df.columns:
+                    combined_df[col] = 'N/A'
+            return combined_df
         return None
 
     # Rest of the class remains the same...
