@@ -1,114 +1,54 @@
-from langchain_openai import ChatOpenAI
-from langchain.prompts import PromptTemplate
-from langchain_core.output_parsers import StrOutputParser
+from src.data.io_handler import IOHandler
 from src.utils.config import Config
-from src.model.model_trainer import ModelTrainer
-import json
-import random
-import re
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+from langchain_community.vectorstores import FAISS
+import pandas as pd
 import os
 
-class AIModel:
+class ModelTrainer:
     def __init__(self):
         self.config = Config()
         self.model = ChatOpenAI(api_key=self.config.get_openai_api_key(), temperature=0.8)
-        self.model_trainer = ModelTrainer()
-        try:
-            self.vector_store = self.model_trainer.get_vector_store()
-        except Exception as e:
-            print(f"Error Loading Vector Store: {str(e)}")
-            self.vector_store = None
-        self.scd_templates = self.load_template()
+        self.embeddings = OpenAIEmbeddings(api_key=self.config.get_openai_api_key())
+        self.vector_store = None
 
-    def load_template(self):
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        template_path = os.path.join(current_dir, 'templates', 'scdTemplate.json')
-        with open(template_path, 'r') as f:
-            return json.load(f)['scd_examples']
+    def train(self):
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        data_dir = os.path.join(project_root, 'dataSource')
 
-    def generate_scd(self, user_prompt, service, additional_controls):
-        # Query the vector store for relevant controls
-        relevant_controls = self.vector_store.similarity_search(user_prompt, k=5)
-        control_descriptions = [doc.page_content for doc in relevant_controls]
-        control_ids = [f"SCD-{i:03d}" for i in range(1, 16)]
-        template_str = self.format_template(random.choice(self.scd_templates))
+        if not os.path.exists(data_dir):
+            raise FileNotFoundError(f"The dataSource directory does not exist: {data_dir}")
 
-        prompt_template = PromptTemplate(
-            input_variables=["control_descriptions", "user_prompt", "service", "control_ids", "scd_template", "additional_controls"],
-            template="""
-You are a cloud security expert. Based on the following control descriptions and the user's request, generate between 10 to 15 detailed Security Control Definitions (SCDs) for different Control Names relevant to the cloud service mentioned in the user prompt.
+        csv_files = [os.path.join(data_dir, f) for f in os.listdir(data_dir) if f.endswith('.csv')]
 
-Control descriptions: {control_descriptions}
+        if not csv_files:
+            raise FileNotFoundError(f"No CSV files found in the dataSource directory: {data_dir}")
 
-Based on these descriptions and the following user request, generate detailed Security Control Definitions (SCDs) for the service: {service}
+        dataset = IOHandler.load_csv(csv_files)
+        dataset = dataset.astype(str)
 
-User request: {user_prompt}
+        texts = dataset['Control Description'].tolist()
+        metadatas = dataset.to_dict('records')
 
-Provide your response in the following format:
+        for metadata in metadatas:
+            for key, value in metadata.items():
+                metadata[key] = str(value)
 
-Control ID: {{control_id}}
-Control Name: [Name of the control]
-Description: [Brief description of the Control Name]
-Implementation Details: [Detailed steps for implementing the control]
-Responsibility: [Who is responsible for implementing this control? Either, Is it Customer or is it shared between CloudProvider & Customer]
-Frequency: [How often should this control be reviewed/implemented? Choose between Continuous / Annual Review / Quarterly Review / Monthly Review]
-Evidence: [What evidence is required to prove this control is in place]
+        # Create and save the vector store
+        self.vector_store = FAISS.from_texts(texts, self.embeddings, metadatas=metadatas)
 
-Here's an example template for a well-formatted SCD:
+        # Save the vector store
+        vector_store_path = os.path.join(os.path.dirname(__file__), 'vector_store')
+        self.vector_store.save_local(vector_store_path)
 
-{scd_template}
+    def load_trained_model(self):
+        vector_store_path = os.path.join(os.path.dirname(__file__), 'vector_store')
+        if os.path.exists(vector_store_path):
+            self.vector_store = FAISS.load_local(vector_store_path, self.embeddings, allow_dangerous_deserialization=True)
+        else:
+            raise FileNotFoundError("Trained model not found. Please run the training process first.")
 
-For each SCD, provide your response in the same format as the template above. Ensure each SCD is unique and relevant to the user's request. Use the information available in the control descriptions to inform your responses. Aim for consistency in naming conventions and level of detail across SCDs.
-
-In addition to the general security controls, make sure to include SCDs that specifically address the following control areas:
-
-{additional_controls}
-
-Control IDs to use: {control_ids}
-"""
-        )
-
-        chain = prompt_template | self.model | StrOutputParser()
-        response = chain.invoke({
-            "control_descriptions": "\n".join(control_descriptions),
-            "user_prompt": user_prompt,
-            "service": service,
-            "control_ids": ", ".join(control_ids),
-            "scd_template": template_str,
-            "additional_controls": ", ".join(additional_controls)
-        })
-
-        validated_scds = self.validate_scds(response)
-        if len(validated_scds) < 10:
-            response = chain.invoke({
-                "control_descriptions": "\n".join(control_descriptions),
-                "user_prompt": f"{user_prompt} Please ensure to generate at least 10 valid SCDs.",
-                "service": service,
-                "control_ids": ", ".join(control_ids),
-                "scd_template": template_str,
-                "additional_controls": ", ".join(additional_controls)
-            })
-            validated_scds = self.validate_scds(response)
-
-        return "\n\n".join(validated_scds)
-
-    def format_template(self, template):
-        formatted = f"Control ID: {template['Control ID']}\n"
-        formatted += f"Control Name: {template['Control Name']}\n"
-        formatted += f"Description: {template['Description']}\n"
-        formatted += "Implementation Details:\n"
-        for detail in template['Implementation Details']:
-            formatted += f"- {detail}\n"
-        formatted += f"Responsibility: {template['Responsibility']}\n"
-        formatted += f"Review Frequency: {template['Review Frequency']}\n"
-        formatted += f"Evidence Source: {template['Evidence Source']}"
-        return formatted
-
-    def validate_scds(self, response):
-        scd_pattern = re.compile(r'Control ID:.*?(?=Control ID:|$)', re.DOTALL)
-        scds = scd_pattern.findall(response)
-        validated_scds = []
-        for scd in scds:
-            if all(field in scd for field in ['Control ID:', 'Control Name:', 'Description:', 'Implementation Details:', 'Responsibility:', 'Frequency:', 'Evidence:']):
-                validated_scds.append(scd.strip())
-        return validated_scds
+    def get_vector_store(self):
+        if self.vector_store is None:
+            self.load_trained_model()
+        return self.vector_store
