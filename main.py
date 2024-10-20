@@ -28,9 +28,9 @@ class AIModel:
 
     def generate_scd(self, user_prompt, service, additional_controls):
         # Query the vector store for relevant controls
-        relevant_controls = self.vector_store.similarity_search(user_prompt, k=15)
+        relevant_controls = self.vector_store.similarity_search(user_prompt, k=5)
         control_descriptions = [doc.page_content for doc in relevant_controls]
-        control_ids = [doc.metadata.get('Control ID', f"SCD-{i:03d}") for i, doc in enumerate(relevant_controls, 1)]
+        control_ids = [f"SCD-{i:03d}" for i in range(1, 16)]
         template_str = self.format_template(random.choice(self.scd_templates))
 
         prompt_template = PromptTemplate(
