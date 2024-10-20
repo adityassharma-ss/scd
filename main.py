@@ -1,54 +1,45 @@
 from src.data.io_handler import IOHandler
-from src.utils.config import Config
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-from langchain_community.vectorstores import FAISS
+from src.model.ai_model import AIModel
 import pandas as pd
-import os
+import re
 
-class ModelTrainer:
+class SCDGenerator:
     def __init__(self):
-        self.config = Config()
-        self.model = ChatOpenAI(api_key=self.config.get_openai_api_key(), temperature=0.8)
-        self.embeddings = OpenAIEmbeddings(api_key=self.config.get_openai_api_key())
-        self.vector_store = None
+        self.ai_model = AIModel()
+        self.additional_controls = ["Tagging", "Naming Conventions", "Authentication", "Traffic Management"]
 
-    def train(self):
-        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        data_dir = os.path.join(project_root, 'dataSource')
+    def generate_scd(self, user_prompt):
+        """Generate SCD based on user prompt"""
+        service = "Unknown"  # implement a method to detect the service from the prompt
+        return self.ai_model.generate_scd(user_prompt, service, self.additional_controls)
 
-        if not os.path.exists(data_dir):
-            raise FileNotFoundError(f"The dataSource directory does not exist: {data_dir}")
+    def save_scd(self, scd, output_file_path, format='md'):
+        scd_entries = re.split(r'\n\s*\n', scd.strip())
 
-        csv_files = [os.path.join(data_dir, f) for f in os.listdir(data_dir) if f.endswith('.csv')]
+        if format == 'md':
+            with open(output_file_path, 'w') as f:
+                f.write(scd)
+        elif format in ['csv', 'xlsx']:
+            csv_data = []
+            for scd_entry in scd_entries:
+                entry_data = {}
+                implementation_details = []
+                for line in scd_entry.split('\n'):
+                    if ':' in line:
+                        key, value = line.split(':', 1)
+                        key = key.strip()
+                        value = value.strip()
+                        if key == 'Implementation Details':
+                            implementation_details.append(value)
+                        else:
+                            entry_data[key] = value
+                entry_data['Implementation Details'] = '; '.join(implementation_details)
+                csv_data.append(entry_data)
 
-        if not csv_files:
-            raise FileNotFoundError(f"No CSV files found in the dataSource directory: {data_dir}")
-
-        dataset = IOHandler.load_csv(csv_files)
-        dataset = dataset.astype(str)
-
-        texts = dataset['Control Description'].tolist()
-        metadatas = dataset.to_dict('records')
-
-        for metadata in metadatas:
-            for key, value in metadata.items():
-                metadata[key] = str(value)
-
-        # Create and save the vector store
-        self.vector_store = FAISS.from_texts(texts, self.embeddings, metadatas=metadatas)
-
-        # Save the vector store
-        vector_store_path = os.path.join(os.path.dirname(__file__), 'vector_store')
-        self.vector_store.save_local(vector_store_path)
-
-    def load_trained_model(self):
-        vector_store_path = os.path.join(os.path.dirname(__file__), 'vector_store')
-        if os.path.exists(vector_store_path):
-            self.vector_store = FAISS.load_local(vector_store_path, self.embeddings, allow_dangerous_deserialization=True)
+            df = pd.DataFrame(csv_data)
+            if format == 'csv':
+                df.to_csv(output_file_path, index=False)
+            else:
+                df.to_excel(output_file_path, index=False)
         else:
-            raise FileNotFoundError("Trained model not found. Please run the training process first.")
-
-    def get_vector_store(self):
-        if self.vector_store is None:
-            self.load_trained_model()
-        return self.vector_store
+            raise ValueError(f"Unsupported format: {format}")
