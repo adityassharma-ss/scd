@@ -1,37 +1,23 @@
-# Exclude environment files
-.env
+# Use Python image
+FROM python:3.12.7
 
-# Ignore Python cache files
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
+# Set the working directory
+WORKDIR /app
 
-# Ignore virtual environment directories
-venv/
-.venv/
+# Copy the application code
+COPY . /app
 
-# Ignore any compiled files
-*.o
-*.so
+# Install required dependencies
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Ignore git and version control related files
-.git
-.gitignore
+# Install AWS CLI (optional, if you need to retrieve secrets using AWS CLI)
+RUN apt-get update && apt-get install -y \
+    awscli \
+    && rm -rf /var/lib/apt/lists/*
 
-# Ignore logs and temp files
-*.log
-*.tmp
+# Expose the Streamlit default port
+EXPOSE 8501
 
-# Ignore Docker-related files
-Dockerfile
-
-# Ignore any temporary directories
-temp/
-tmp/
-
-# Ignore Streamlit hidden files
-.streamlit/
-
-# Exclude documentation and non-code directories
-productDocumentation/
+# Command to run the Streamlit app
+# IMPORTANT: Don't pass environment variables here directly.
+CMD ["python", "-m", "streamlit", "run", "Home.py"]
