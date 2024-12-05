@@ -1,61 +1,127 @@
-Linux-OS Monitoring Setup: A Comprehensive MNC-Level Document
+SCOM Windows Monitoring Setup Documentation
+1. Introduction to SCOM
 
-Executive Summary
-This document outlines the Linux-OS monitoring setup implemented across the organization's server infrastructure. It details the tools, workflows, and cloud-based services leveraged to provide comprehensive visibility and alerting for the Linux-based systems.
+System Center Operations Manager (SCOM) is a Microsoft enterprise-grade tool designed to monitor the health, performance, and availability of IT services and infrastructure in both on-premise and cloud environments. It enables centralized monitoring of critical components such as:
 
-Introduction
-The Linux-OS monitoring setup is a critical component of the organization's overall IT operations strategy. By employing industry-leading open-source monitoring tools and integrating with cloud-based services, we have established a robust and scalable monitoring solution to ensure the health and performance of our Linux server environments.
+    Infrastructure Components: Domain controllers, Active Directory, DHCP, DNS, Hypervisors, etc.
+    System Features: CPU, memory metrics, storage, and network statistics.
 
-Monitoring Workflow
-The Linux-OS monitoring setup follows a well-defined workflow, as illustrated in the provided diagram:
+SCOM provides insights through comprehensive dashboards, enabling proactive issue resolution and optimized IT operations.
+2. Components of SCOM
+a) Management Group
 
-    Data Collection
-        The Linux servers are monitored using two primary agents: Fluent Bit and metric-beats.
-        These agents collect various system metrics and logs, which are then forwarded to the centralized monitoring platform.
-    Centralized Monitoring
-        The collected data is ingested and processed by the OpenSearch platform, which provides advanced search and analytics capabilities.
-        The OpenSearch Dashboards offer a unified view of the monitored systems, enabling comprehensive monitoring and analysis.
-    Alerting and Notification
-        The ElastAlert component is integrated with OpenSearch to trigger alerts based on predefined rules and thresholds.
-        These alerts are then forwarded to the organization's incident management and notification systems, ensuring timely awareness and response to potential issues.
+) Management Group
 
-Cloud Infrastructure
-The Linux-OS monitoring setup is entirely hosted on the organization's AWS cloud infrastructure. The OpenSearch clusters are managed and scaled by AWS, providing a highly available and fault-tolerant monitoring platform.
+The Management Group is the core logical entity in a SCOM deployment, encompassing all objects, configurations, and data. It functions similarly to a domain or Active Directory and serves as the foundation of the SCOM hierarchy.
 
-Conclusion
-The Linux-OS monitoring setup, leveraging open-source tools and cloud-based services, has been instrumental in maintaining the health and performance of the organization's Linux server environments. By providing comprehensive visibility and proactive alerting, this solution enables the IT operations team to quickly identify and address issues, ensuring the reliability and efficiency of the organization's critical IT systems.
-AS
+Key aspects include:
 
-I need more detailed documentation
+    Contains multiple Management Servers and Databases based on the environment.
+    Provides centralized management and scalability for monitoring services.
 
-Linux-OS Monitoring Setup: A Detailed MNC-Level Report
+b) Management Server
 
-I. Executive Summary
-This report outlines the comprehensive Linux-OS monitoring setup implemented across the organization's server infrastructure. It details the tools, workflows, and cloud-based services leveraged to provide visibility, analytics, and alerting for the Linux-based systems.
+The Management Server plays a crucial role in collecting, processing, and analyzing data received from agents installed on monitored systems. It also communicates with the databases for storing configurations and operational data.
+c) Operations Console
 
-II. Introduction
-Maintaining the health and performance of the organization's Linux server environments is a critical priority. To achieve this, we have established a robust monitoring solution that leverages industry-leading open-source tools and integrates with cloud-based services.
+The Operations Console is the administrative interface for connecting to and managing the SCOM environment. It allows authorized users to perform tasks such as:
 
-III. Monitoring Workflow
-The Linux-OS monitoring setup follows a well-defined three-stage workflow:
+    Configuring monitors and rules.
+    Accessing performance reports.
+    Monitoring health statuses.
 
-    Data Collection
-        The Linux servers are monitored using two primary agents: Fluent Bit and metric-beats.
-        Fluent Bit collects system logs and forwards them to the centralized monitoring platform.
-        Metric-beats gathers various system metrics, such as CPU, memory, disk, and network utilization, and sends them to the monitoring system.
-    Centralized Monitoring
-        The data collected by the agents is ingested and processed by the OpenSearch platform, which provides advanced search and analytics capabilities.
-        The OpenSearch Dashboards offer a unified, web-based interface for monitoring and analyzing the data from all the Linux servers.
-    Alerting and Notification
-        The ElastAlert component is integrated with OpenSearch to trigger alerts based on predefined rules and thresholds.
-        These alerts are then forwarded to the organization's incident management and notification systems, ensuring timely awareness and response to potential issues.
+d) Operational Database
 
-IV. Cloud Infrastructure
-The Linux-OS monitoring setup is entirely hosted on the organization's AWS cloud infrastructure. The key benefits of this cloud-based approach include:
+This SQL-based database stores real-time operational data such as configurations, customizations, and management packs. It interacts with the Management Server for live updates and quick troubleshooting.
+e) Data Warehouse Database
 
-    High Availability: The OpenSearch clusters are managed and scaled by AWS, providing a highly available and fault-tolerant monitoring platform.
-    Scalability: The cloud-based architecture allows for easy scaling of the monitoring infrastructure to accommodate the growing number of Linux servers.
-    Cost-Effectiveness: By leveraging AWS services, we can optimize costs and reduce the overhead of managing the monitoring infrastructure.
+The Data Warehouse (DW) is a historical database for storing log changes, performance data, and reporting metrics.
 
-V. Conclusion
-The Linux-OS monitoring setup, leveraging open-source tools and cloud-based services, has been instrumental in maintaining the health and performance of the organization's Linux server environments. By providing comprehensive visibility, advanced analytics, and proactive alerting, this solution enables the IT operations team to quickly identify and address issues, ensuring the reliability and efficiency of the organization's critical IT systems.
+    Default retention period: 300 days.
+    Used for long-term analytics and compliance reporting.
+
+f) Web Console
+
+The Web Console is a browser-based interface for remote monitoring of tasks and operational health. However, this feature is not implemented in the current environment.
+g) Reporting Server
+
+This server generates reports based on data from the DW database. Currently, Grafana is utilized for reporting in the absence of a dedicated reporting server.
+h) Gateway Server
+
+The Gateway Server bridges communication between agents and the Management Server in different domains. Certificate-based authentication is used in its absence.
+3. Monitoring Scope
+
+SCOM is configured to monitor:
+
+    Core Metrics: CPU, memory, storage, and network performance.
+    Services: Backup tasks, scheduled jobs, and application URLs.
+    Custom Monitoring: Configurable rules and monitors for specific applications or services.
+
+4. Scope of Work
+SCOM Administration
+
+    Setting up and managing Management Groups.
+    Installing, updating, and removing agents.
+    Configuring service and event monitoring.
+    Creating and customizing monitoring rules.
+
+URL Monitoring
+
+Configuring HTTP/HTTPS monitors for applications.
+Agent Management
+
+Troubleshooting agent issues and ensuring proper data flow to the Management Server.
+Reporting
+
+Generating and analyzing reports from the Data Warehouse or Grafana dashboards.
+5. Environment Overview
+Production Environment
+
+    3 Management Servers.
+    2 Databases (Operational and DW).
+
+Dev Environment
+
+    2 Management Servers.
+    1 Database shared between instances.
+
+Legacy Monitoring
+
+    Older servers are monitored using a separate SCOM 2016 environment due to compatibility issues.
+
+6. Key Metrics and Limits
+
+    Simultaneous Operations Console Users: 50.
+    Agent-Monitored Computers: 3000.
+    Agent-Managed Linux/Unix Systems: 6000.
+
+7. Best Practices
+Infrastructure Design
+
+    Use high-availability configurations for Management and Database Servers.
+    Maintain separate environments for development, QA, and production to ensure operational stability.
+
+Security
+
+    Use certificate-based authentication for agents in untrusted domains.
+    Grant role-based access control (RBAC) to limit administrative privileges.
+
+Monitoring Optimization
+
+    Avoid excessive rule/monitor creation to prevent data overload.
+    Regularly archive and clean up the Data Warehouse to improve performance.
+
+Automation
+
+    Automate agent deployment via tools like Chef or Ansible.
+    Schedule regular database backups and performance tuning.
+
+8. Data Flow
+
+    Agent: Collects performance and health data from monitored systems.
+    Management Server: Aggregates and processes data from agents.
+    Operational Database: Stores current configurations and performance metrics.
+    Data Warehouse: Logs historical data for analytics and reporting.
+    Console/Grafana: Provides real-time visualization and reporting.
+
+This document outlines the current setup, responsibilities, and optimization strategies for SCOM at Kenvue. Please review and provide feedback for additional details or customizations.
