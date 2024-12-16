@@ -1,15 +1,14 @@
 Import-Module OperationsManager
 
-$inputFile = "C:\Scripts\server_list.csv"
+$inputFile = "C:\Scripts\server_list.txt"
 $outputFile = "C:\Scripts\monitoring_status.csv"
 
 New-SCOMManagementGroupConnection -ComputerName "SCOMManagementServer"
 
-$serverList = Import-Csv -Path $inputFile
+$serverList = Get-Content -Path $inputFile
 $results = @()
 
-foreach ($server in $serverList) {
-    $serverName = $server.Servers
+foreach ($serverName in $serverList) {
     $monitored = Get-SCOMManagedComputer | Where-Object { $_.DisplayName -eq $serverName }
 
     if ($monitored) {
