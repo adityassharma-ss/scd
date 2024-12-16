@@ -8,6 +8,9 @@ $ManagementServer = "YourSCOMServerName"  # Replace with actual server name or I
 $timeout = 30
 $startTime = Get-Date
 
+# Set the path for the output text file
+$outputFile = "C:\path\to\output.txt"  # Replace with the desired file path
+
 # Function to check connection status with timeout
 function Connect-ToSCOM {
     try {
@@ -36,18 +39,29 @@ function Get-MonitoredServers {
         $monitoredServers = Get-SCOMManagedComputer
 
         if ($monitoredServers) {
+            $serverCount = $monitoredServers.Count
+            Write-Output "Monitored Servers Count: $serverCount"
+
+            # Save to file
+            $output = "Monitored Servers Count: $serverCount`r`n"
+            $output | Out-File -FilePath $outputFile -Append
+
             Write-Output "Monitored Servers:"
             $monitoredServers | ForEach-Object {
-                Write-Output "$($_.Name) - Status: $($_.Status)"
+                $serverDetails = "$($_.Name) - Status: $($_.Status)"
+                Write-Output $serverDetails
+                $serverDetails | Out-File -FilePath $outputFile -Append
             }
         } else {
             Write-Output "No monitored servers found."
+            "No monitored servers found." | Out-File -FilePath $outputFile -Append
         }
     }
     catch {
         Write-Output "Error retrieving monitored servers: $_"
+        "Error retrieving monitored servers: $_" | Out-File -FilePath $outputFile -Append
     }
 }
 
-# Retrieve and output the list of monitored servers
+# Retrieve and output the list of monitored servers and their count to file
 Get-MonitoredServers
