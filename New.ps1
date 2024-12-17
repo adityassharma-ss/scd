@@ -39,11 +39,16 @@ function Configure-SCOMAgent {
             } catch {
                 Write-Host "Failed to stop HealthService: $_"
             }
+        } else {
+            Write-Host "HealthService is not running or not found."
         }
 
         # Configure the Management Group and Server
         try {
-            & "$healthServicePath" /addmanagementgroup:$managementGroup /managementserver:$managementServer
+            # Ensure the command is correctly formatted and executes HealthService.exe with appropriate arguments
+            $arguments = "/addmanagementgroup:$managementGroup /managementserver:$managementServer"
+            Write-Host "Running command: & '$healthServicePath' $arguments"
+            & "$healthServicePath" $arguments
             Write-Host "Successfully configured Management Group and Server."
         } catch {
             Write-Host "Error configuring Management Group and Server: $_"
