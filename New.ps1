@@ -2,9 +2,14 @@ Import-Module OperationsManager -ErrorAction Stop
 
 $ManagementServer = "YourSCOMServerName"
 $serverListFile = "C:\path\to\serverList.txt"
-$outputFile = "C:\path\to\output.txt"
+$outputDirectory = "D:\serverList"
+$outputFile = "$outputDirectory\MSSQLDB-monitoredServers.txt"
 $timeout = 30
 $startTime = Get-Date
+
+if (-Not (Test-Path -Path $outputDirectory)) {
+    New-Item -Path $outputDirectory -ItemType Directory
+}
 
 function Connect-ToSCOM {
     try {
