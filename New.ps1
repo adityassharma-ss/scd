@@ -23,9 +23,9 @@ Write-Host "Total monitors: $($monitors.Count)"
 # Process monitors
 foreach ($monitor in $monitors) {
     try {
-        if ($monitor.Enabled -eq $true) {
-            $thresholds = $monitor.Configuration
-            $details = @"
+        Write-Host "Processing Monitor: $($monitor.DisplayName)"
+        $thresholds = $monitor.Configuration
+        $details = @"
 $counter. Monitor Name:    $($monitor.DisplayName)
     Target Object:       $($monitor.Target.DisplayName)
     Threshold:           $thresholds
@@ -34,9 +34,9 @@ $counter. Monitor Name:    $($monitor.DisplayName)
     Description:         $($monitor.Description)
 
 "@
-            $outputContent += $details
-            $counter++
-        }
+        Write-Host $details
+        $outputContent += $details
+        $counter++
     } catch {
         Write-Warning "Failed to process monitor: $($monitor.DisplayName)"
     }
@@ -45,9 +45,9 @@ $counter. Monitor Name:    $($monitor.DisplayName)
 # Process rules
 foreach ($rule in $rules) {
     try {
-        if ($rule.Enabled -eq $true) {
-            $thresholds = $rule.Configuration
-            $details = @"
+        Write-Host "Processing Rule: $($rule.DisplayName)"
+        $thresholds = $rule.Configuration
+        $details = @"
 $counter. Rule Name:       $($rule.DisplayName)
     Target Object:       $($rule.Target.DisplayName)
     Threshold:           $thresholds
@@ -56,9 +56,9 @@ $counter. Rule Name:       $($rule.DisplayName)
     Description:         $($rule.Description)
 
 "@
-            $outputContent += $details
-            $counter++
-        }
+        Write-Host $details
+        $outputContent += $details
+        $counter++
     } catch {
         Write-Warning "Failed to process rule: $($rule.DisplayName)"
     }
