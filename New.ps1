@@ -1,21 +1,31 @@
-# Output file path
-$outputFile = "C:\SCOM_Thresholds.txt"
+# Import SCOM module
+Import-Module OperationsManager
 
-# Initialize output content
+# Connect to SCOM
+$ManagementGroup = "<ManagementGroup>"  # Replace with your Management Group
+New-SCOMManagementGroupConnection -ComputerName $ManagementGroup
+
+# Output file
+$outputFile = "C:\SCOM_Thresholds_Debugged.txt"
+
+# Initialize counter and output
+$counter = 1
 $outputContent = @()
 
-# Get all monitors and rules
-$monitors = Get-SCOMMonitor
+# Fetch rules and monitors
 $rules = Get-SCOMRule
+$monitors = Get-SCOMMonitor
 
-# Counter for numbering
-$counter = 1
+# Debug counts
+Write-Host "Total rules: $($rules.Count)"
+Write-Host "Total monitors: $($monitors.Count)"
 
 # Process monitors
 foreach ($monitor in $monitors) {
-    if ($monitor.Enabled -eq $true) {
-        $thresholds = $monitor.Configuration
-        $details = @"
+    try {
+        if ($monitor.Enabled -eq $true) {
+            $thresholds = $monitor.Configuration
+            $details = @"
 $counter. Monitor Name:    $($monitor.DisplayName)
     Target Object:       $($monitor.Target.DisplayName)
     Threshold:           $thresholds
@@ -24,16 +34,20 @@ $counter. Monitor Name:    $($monitor.DisplayName)
     Description:         $($monitor.Description)
 
 "@
-        $outputContent += $details
-        $counter++
+            $outputContent += $details
+            $counter++
+        }
+    } catch {
+        Write-Warning "Failed to process monitor: $($monitor.DisplayName)"
     }
 }
 
 # Process rules
 foreach ($rule in $rules) {
-    if ($rule.Enabled -eq $true) {
-        $thresholds = $rule.Configuration
-        $details = @"
+    try {
+        if ($rule.Enabled -eq $true) {
+            $thresholds = $rule.Configuration
+            $details = @"
 $counter. Rule Name:       $($rule.DisplayName)
     Target Object:       $($rule.Target.DisplayName)
     Threshold:           $thresholds
@@ -42,12 +56,15 @@ $counter. Rule Name:       $($rule.DisplayName)
     Description:         $($rule.Description)
 
 "@
-        $outputContent += $details
-        $counter++
+            $outputContent += $details
+            $counter++
+        }
+    } catch {
+        Write-Warning "Failed to process rule: $($rule.DisplayName)"
     }
 }
 
-# Write to file
+# Write output to file
 $outputContent | Out-File -FilePath $outputFile -Encoding UTF8 -Force
 
-Write-Host "Threshold and polling details saved to: $outputFile"
+Write-Host "Processing complete. File saved at: $outputFile"
