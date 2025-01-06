@@ -2,70 +2,105 @@
 Import-Module OperationsManager
 
 # Connect to SCOM Management Server
-$ManagementGroup = "<Your Management Group>"  # Replace with your Management Group name
-New-SCOMManagementGroupConnection -ComputerName $ManagementGroup
+param(
+    [Parameter(Mandatory=$true)]
+    [string]$ManagementGroup,
+    [string]$outputFile = "C:\SCOM_Thresholds_for_Servers.txt"
+)
 
-# Output file path
-$outputFile = "C:\SCOM_Thresholds_for_Servers.txt"
+try {
+    # Connect to SCOM Management Group with error handling
+    Write-Host "Connecting to SCOM Management Group: $ManagementGroup"
+    $mgConnection = New-SCOMManagementGroupConnection -ComputerName $ManagementGroup -ErrorAction Stop
+} catch {
+    Write-Error "Failed to connect to SCOM Management Group: $_"
+    exit 1
+}
 
 # Initialize the output content array
 $outputContent = @()
 $counter = 1
 
-# Fetch all Windows servers monitored by SCOM
-$windowsServers = Get-SCOMAgent | Where-Object { $_.OperatingSystem -like "Windows*" }
+# Improved Windows server query
+$windowsServers = Get-SCOMClass -Name "Microsoft.Windows.Computer" | Get-SCOMClassInstance
 
-# Check if any servers are found
-if ($windowsServers.Count -eq 0) {
-    Write-Host "No Windows servers found. Check the SCOM connection and agents."
-    exit
+# Verify server count and output details
+if ($null -eq $windowsServers -or $windowsServers.Count -eq 0) {
+    Write-Error "No Windows servers found. Please verify:
+    1. SCOM connection is successful
+    2. Windows Computer class instances exist
+    3. You have sufficient permissions"
+    exit 1
 }
 
-Write-Host "Total Windows servers monitored: $($windowsServers.Count)"
+Write-Host "Total Windows servers found: $($windowsServers.Count)"
 
-# Iterate through each Windows server
+# Create progress bar
+$progressCounter = 0
+$totalServers = $windowsServers.Count
+
 foreach ($server in $windowsServers) {
-    Write-Host "Processing server: $($server.FullName)"
+    $progressCounter++
+    $progressPercentage = ($progressCounter / $totalServers) * 100
+    Write-Progress -Activity "Processing Servers" -Status "Processing $($server.DisplayName)" -PercentComplete $progressPercentage
     
     try {
-        # Fetch all monitors and rules for the server
-        $serverMonitors = Get-SCOMMonitor | Where-Object { $_.Target -eq $server.GetType().Name }
+        # Get monitors specific to this server instance
+        $serverMonitors = Get-SCOMMonitor | Where-Object { 
+            $_.Target.Id -eq $server.Id -or 
+            ($_.Target.DisplayName -eq $server.DisplayName)
+        }
 
-        # Iterate over each monitor to extract relevant threshold and alert data
         foreach ($monitor in $serverMonitors) {
-            Write-Host "Fetching monitor: $($monitor.DisplayName)"
-            
-            # Fetch thresholds (This depends on the monitor type, might need more customization)
-            $thresholds = $monitor.Configuration  # Assuming the thresholds are in 'Configuration'
-            $alertCriteria = $monitor.ScheduleDescription  # Assuming alert criteria can be found here
-            
-            # If no threshold or criteria found, continue to next monitor
-            if (-not $thresholds -or -not $alertCriteria) {
-                continue
+            # Skip if monitor is null
+            if ($null -eq $monitor) { continue }
+
+            # Extract configuration details safely
+            $thresholds = try {
+                $monitor.Configuration.Xml
+            } catch {
+                "Configuration not available"
             }
-            
-            # Format the data for this server and monitor
-            $details = @"
-$counter. Server:            $($server.FullName)
-    Monitor Name:            $($monitor.DisplayName)
-    Thresholds:              $thresholds
-    Alert Criteria:          $alertCriteria
-    Description:             $($monitor.Description)
+
+            $alertCriteria = try {
+                $monitor.AlertSettings.AlertMessage
+            } catch {
+                "Alert criteria not available"
+            }
+
+            # Only add to output if we have meaningful data
+            if ($thresholds -ne "Configuration not available" -or $alertCriteria -ne "Alert criteria not available") {
+                $details = @"
+$counter. Server:            $($server.DisplayName)
+    Health State:           $($server.HealthState)
+    Monitor Name:           $($monitor.DisplayName)
+    Monitor Category:       $($monitor.Category)
+    Thresholds:            $thresholds
+    Alert Criteria:        $alertCriteria
+    Description:           $($monitor.Description)
 
 "@
-            $outputContent += $details
-            $counter++
+                $outputContent += $details
+                $counter++
+            }
         }
 
     } catch {
-        Write-Warning "Failed to process server: $($server.FullName)"
+        Write-Warning "Error processing server $($server.DisplayName): $_"
+        continue
     }
 }
 
 # Write the output content to a file
 if ($outputContent.Count -gt 0) {
-    $outputContent | Out-File -FilePath $outputFile -Encoding UTF8 -Force
-    Write-Host "Processing complete. File saved at: $outputFile"
+    try {
+        $outputContent | Out-File -FilePath $outputFile -Encoding UTF8 -Force
+        Write-Host "Processing complete. File saved at: $outputFile"
+        Write-Host "Total entries processed: $($counter - 1)"
+    } catch {
+        Write-Error "Failed to write to output file: $_"
+        exit 1
+    }
 } else {
-    Write-Host "No threshold data found for the monitored servers."
+    Write-Warning "No threshold data found for the monitored servers."
 }
