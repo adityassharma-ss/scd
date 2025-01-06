@@ -1,37 +1,50 @@
-# Import SCOM module (if not loaded)
+# Import SCOM module (if not already loaded)
 Import-Module OperationsManager
 
 # Connect to the SCOM Management Group
-$ManagementGroup = "<ManagementGroup>"  # Replace with your Management Group name
+$ManagementGroup = "<ManagementGroup>"  # Replace with your Management Group Name
 New-SCOMManagementGroupConnection -ComputerName $ManagementGroup
 
-# Output file
-$outputFile = "C:\SCOM_AlertRules_Thresholds.csv"
+# Output file path
+$outputFile = "C:\SCOM_Rules_and_Thresholds.csv"
 
 # Initialize a collection for results
 $results = @()
 
-# Get all Windows Server-related rules
-$rules = Get-SCOMRule | Where-Object { $_.Target.Name -like "*Windows Server*" }
+# Get all rules from SCOM
+$rules = Get-SCOMRule
 
-# Process each rule
+# Check if rules exist
+if ($rules -eq $null -or $rules.Count -eq 0) {
+    Write-Host "No rules found in the SCOM management group."
+    exit
+}
+
+# Process each rule and extract details
 foreach ($rule in $rules) {
-    $ruleDetails = @{
-        RuleName           = $rule.DisplayName
-        TargetObject       = $rule.Target.DisplayName
-        Category           = $rule.Category
-        Enabled            = $rule.Enabled
-        AlertSeverity      = $rule.AlertSeverity
-        PollingInterval    = $rule.ScheduleDescription
-        TriggerCondition   = $rule.ConditionDetectionDisplayName
-        AlertDescription   = $rule.Description
-    }
+    try {
+        $ruleDetails = @{
+            RuleName           = $rule.DisplayName
+            RuleID             = $rule.Id
+            TargetObject       = $rule.Target.DisplayName
+            Category           = $rule.Category
+            Enabled            = $rule.Enabled
+            PollingInterval    = $rule.ScheduleDescription
+            AlertSeverity      = $rule.AlertSeverity
+            Description        = $rule.Description
+        }
 
-    # Add the details to results
-    $results += New-Object PSObject -Property $ruleDetails
+        # Add the details to the results array
+        $results += New-Object PSObject -Property $ruleDetails
+    } catch {
+        Write-Warning "Error processing rule: $($rule.DisplayName)"
+    }
 }
 
 # Export results to CSV
-$results | Export-Csv -Path $outputFile -NoTypeInformation -Force
-
-Write-Host "Extraction complete. File saved at: $outputFile"
+if ($results.Count -gt 0) {
+    $results | Export-Csv -Path $outputFile -NoTypeInformation -Force
+    Write-Host "Extraction complete. File saved at: $outputFile"
+} else {
+    Write-Host "No data to export. Please verify the rules in your SCOM environment."
+}
