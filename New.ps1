@@ -1,50 +1,53 @@
-# Import SCOM module (if not already loaded)
-Import-Module OperationsManager
-
-# Connect to the SCOM Management Group
-$ManagementGroup = "<ManagementGroup>"  # Replace with your Management Group Name
-New-SCOMManagementGroupConnection -ComputerName $ManagementGroup
-
 # Output file path
-$outputFile = "C:\SCOM_Rules_and_Thresholds.txt"
+$outputFile = "C:\SCOM_Thresholds.txt"
 
-# Initialize a counter for numbering and a collection for results
-$counter = 1
+# Initialize output content
 $outputContent = @()
 
-# Get all rules from SCOM
+# Get all monitors and rules
+$monitors = Get-SCOMMonitor
 $rules = Get-SCOMRule
 
-# Check if rules exist
-if ($rules -eq $null -or $rules.Count -eq 0) {
-    Write-Host "No rules found in the SCOM management group."
-    exit
+# Counter for numbering
+$counter = 1
+
+# Process monitors
+foreach ($monitor in $monitors) {
+    if ($monitor.Enabled -eq $true) {
+        $thresholds = $monitor.Configuration
+        $details = @"
+$counter. Monitor Name:    $($monitor.DisplayName)
+    Target Object:       $($monitor.Target.DisplayName)
+    Threshold:           $thresholds
+    Polling Interval:    $($monitor.ScheduleDescription)
+    Alert Severity:      $($monitor.AlertSeverity)
+    Description:         $($monitor.Description)
+
+"@
+        $outputContent += $details
+        $counter++
+    }
 }
 
-# Process each rule and extract details
+# Process rules
 foreach ($rule in $rules) {
-    try {
-        # Construct the text format for each rule
-        $ruleDetails = @"
-$counter. Rule Name:        $($rule.DisplayName)
-    Rule ID:             $($rule.Id)
+    if ($rule.Enabled -eq $true) {
+        $thresholds = $rule.Configuration
+        $details = @"
+$counter. Rule Name:       $($rule.DisplayName)
     Target Object:       $($rule.Target.DisplayName)
-    Category:            $($rule.Category)
-    Enabled:             $($rule.Enabled)
+    Threshold:           $thresholds
     Polling Interval:    $($rule.ScheduleDescription)
     Alert Severity:      $($rule.AlertSeverity)
     Description:         $($rule.Description)
 
 "@
-        # Add details to the output collection
-        $outputContent += $ruleDetails
+        $outputContent += $details
         $counter++
-    } catch {
-        Write-Warning "Error processing rule: $($rule.DisplayName)"
     }
 }
 
-# Write the output to the text file
+# Write to file
 $outputContent | Out-File -FilePath $outputFile -Encoding UTF8 -Force
 
-Write-Host "Extraction complete. File saved at: $outputFile"
+Write-Host "Threshold and polling details saved to: $outputFile"
