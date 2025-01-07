@@ -1,10 +1,7 @@
-Get-SCOMMonitor | Where-Object {$_.DisplayName -match "URL|Web|HTTP"} | ForEach-Object {
-    $monitor = $_
-    $config = Get-SCOMMonitorConfiguration -Monitor $monitor
-    [PSCustomObject]@{
-        DisplayName       = $monitor.DisplayName
-        Target            = $monitor.Target.DisplayName
-        IntervalSeconds   = $config | Where-Object { $_.Property -eq "IntervalSeconds" } | Select-Object -ExpandProperty Value
-        ManagementPack    = $monitor.ManagementPack.DisplayName
-    }
-}
+# Import SCOM module
+Import-Module OperationsManager
+
+# Reset the specific monitor
+$monitor = Get-SCOMMonitor -Name "*HTTP*Error*"
+$instance = Get-SCOMClassInstance -Name "vmcitsnaw00g9"
+Reset-SCOMMonitoringState -Instance $instance -Monitor $monitor -Confirm:$false
