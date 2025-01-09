@@ -1,7 +1,8 @@
-# Import SCOM module
 Import-Module OperationsManager
+New-SCOMManagementGroupConnection -ComputerName "Your-SCOM-Server"
 
-# Reset the specific monitor
-$monitor = Get-SCOMMonitor -Name "*HTTP*Error*"
-$instance = Get-SCOMClassInstance -Name "vmcitsnaw00g9"
-Reset-SCOMMonitoringState -Instance $instance -Monitor $monitor -Confirm:$false
+# Get alerts for the specific server
+$alerts = Get-SCOMAlert | Where-Object {$_.NetbiosComputerName -eq "AWSSPCPNVALT003"}
+
+# Export alerts to CSV
+$alerts | Select-Object Name, Severity, ResolutionState, TimeRaised, Description | Export-Csv -Path "C:\Alerts_AWSSPCPNVALT003.csv" -NoTypeInformation
