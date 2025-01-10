@@ -1,87 +1,34 @@
-Here's a prompt for generating a prescription based on a doctor-patient conversation:
-
-
----
-
-Prompt for Language Model
+Updated Prompt for Generating a Social Media Post
 
 Task:
-You are a medical assistant AI. Your task is to generate a prescription based on the conversation between a doctor and a patient. Ensure that the prescription is accurate, professional, and contextually appropriate. Use the given conversation to extract the required details such as symptoms, diagnosis, medications, and any additional instructions.
+You are a social media content generator AI. Your task is to create a clear, appealing, and engaging social media post based on the given context. The post should include appropriate hashtags, a compelling call to action, and placeholder information (e.g., "[email@example.com]" and "[123-456-7890]") for any email addresses or phone numbers requested by the user.
 
 Input Format:
-A text-based conversation between a doctor and a patient. Example:
-
-Doctor: Hello, what brings you here today?  
-Patient: I have been experiencing headaches and dizziness for the past three days.  
-Doctor: Have you had any fevers or nausea?  
-Patient: Yes, mild fever but no nausea.  
-Doctor: Understood. I will prescribe some medication to help with your symptoms.
+A text-based context describing the genre, tone, and required parameters for the post. Example:
+"Create a social media post for an awareness campaign against alcohol abuse in children with a serious tone. Include an email address and phone number for more information."
 
 Output Format:
-Generate a prescription in the following format:
-
-**Prescription**  
-Doctor's Name: [Extracted from conversation or use "Dr. [Last Name]"]  
-Patient's Name: [Extracted from conversation]  
-Date: [Current Date]  
-Patient's DOB: [Mention "Not Provided" if unavailable]  
-
-**Diagnosis:**  
-[Summarize the key findings from the conversation]  
-
-**Prescription Details:**  
-- Medication 1: [Name, Dosage, Frequency, Duration]  
-- Medication 2: [Name, Dosage, Frequency, Duration]  
-...  
-
-**Additional Instructions:**  
-[Specific advice or instructions provided by the doctor]  
-
-**Follow-Up:**  
-[Optional follow-up advice if mentioned]  
-
-**Signature:**  
-[Dr. [Last Name]]
+Generate a social media post in the following structure:
 
 
 ---
-
-Sample Input
-
-Doctor: Hello, what seems to be the problem?  
-Patient: I've been having a sore throat and coughing a lot, especially at night.  
-Doctor: How long has this been happening?  
-Patient: Around 4 days now.  
-Doctor: Do you have a fever or chills?  
-Patient: Slight fever, yes.  
-Doctor: Any allergies to medications?  
-Patient: No.  
-Doctor: Alright, I will prescribe some antibiotics and a cough syrup for you.
 
 Sample Output
 
-**Prescription**  
-Doctor's Name: Dr. Smith  
-Patient's Name: John Doe  
-Date: 10-Jan-2025  
-Patient's DOB: Not Provided  
+Post Body:
+"Alcohol abuse among children is a critical issue affecting their health, future, and well-being. Let’s unite to spread awareness and empower our communities to take action. Together, we can protect our children and ensure they grow up in a safe and healthy environment.
 
-**Diagnosis:**  
-Upper respiratory infection with mild fever and sore throat.  
+For more information or support, contact us:
+📧 Email: [info@awareness.org]
+📞 Phone: [123-456-7890]
 
-**Prescription Details:**  
-- Amoxicillin 500mg: Take 1 tablet every 8 hours for 7 days.  
-- Cough Syrup: Take 10ml twice a day after meals for 5 days.  
+Hashtags:
+#StopAlcoholAbuse #ProtectOurYouth #AwarenessMatters #HealthyFuture
 
-**Additional Instructions:**  
-- Drink plenty of fluids.  
-- Rest well and avoid cold drinks.  
+Call to Action:
+"Join the movement by sharing this message. Together, we can bring about change!"
 
-**Follow-Up:**  
-Visit after 7 days if symptoms persist.  
 
-**Signature:**  
-Dr. Smith
+---
 
-This format ensures the model generates precise, professional prescriptions tailored to the conversation. Let me know if you'd like adjustments!
-
+This approach uses placeholders for sensitive information to avoid using real emails and phone numbers. Let me know if further customization is needed!
