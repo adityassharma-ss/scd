@@ -1,17 +1,10 @@
-Problem Statement:
+Generate a hierarchical team structure based on the user-provided project details and duration. The team structure should:
 
-Develop a prompt capable of generating a team structure based on user-provided input parameters. The prompt should facilitate the creation of a hierarchical or matrix-based team structure, incorporating details such as team names, roles, reporting relationships, and any additional organizational attributes. It should produce a clear and comprehensive representation of the team's composition and structure. enabling effective collaboration and communication within the organization
-
-Input
-
-I
-
-User will provide the project details and duration for which we need to suggest the team structure.
-
-Sample Input | For reference Purpose only)
-
-Create a team structure to develop the food ordering mobile application in 6 months
-
-Output
-
-A tree structure shall be displayed with Deliver Leader at the top, reporting Manager and then all the team members with their names, POD names and designations. Below a reference is shored
+Include the following roles (if applicable):
+Delivery Leader (overall responsibility).
+Reporting Managers (managing specific aspects of the project).
+Team Members (developers, designers, testers, etc.).
+Specify PODs (teams or subgroups) with team names or focus areas (e.g., frontend, backend, QA).
+Include designations for all roles and clarify reporting relationships.
+Produce a tree structure format that visually represents the hierarchy.
+Tailor the team size and composition to the project requirements and duration.
