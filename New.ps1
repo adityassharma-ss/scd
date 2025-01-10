@@ -1,13 +1,17 @@
-Draft a professional email based on the following context provided by the user. Ensure the email includes:
+Generate a concise and structured job description for a company's website based on the following details:
 
-A subject line that is clear and concise, summarizing the purpose of the email.
-A well-structured body that includes:
-An appropriate greeting.
-A brief introduction or context.
-The main details of the message (event, purpose, or action required).
-A polite closing and any additional instructions, if applicable.
-A closing salutation with a sign-off and sender's name/organization (if specified).
-Format the email to ensure clarity and professionalism."
+Job Title/Role: [Insert role].
+Job Location: [Insert location].
+Years of Experience: [Insert experience level].
+Required Skills: [List technical and soft skills].
+Educational Qualifications: [Specify required degree].
+Include:
+
+A brief job summary highlighting the role and company.
+Key responsibilities (3-5 points).
+Key requirements (3-5 points).
+A short application instruction.
+Ensure clarity and professionalism."
 
 Example Input:
-"Draft an email to invite students to the Graduation Ceremony on March 12th, 2024."
+"Create a job description for a Software Engineer role in New York City. Mid-level position requiring 3+ years of experience with Python, Java, and SQL. Bachelor's degree in Computer Science is mandatory."
