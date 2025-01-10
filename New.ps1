@@ -1,14 +1,17 @@
-Generate a SQL query based on the user-provided natural language instructions. The prompt should:
+Problem Statement:
 
-Identify the operation type (e.g., SELECT, INSERT, UPDATE, DELETE).
-Extract key elements such as table name, columns, conditions, sorting, or grouping from the input text.
-Handle ambiguities by making logical assumptions where necessary and provide comments in the query to explain assumptions.
-Format the SQL query clearly and ensure proper syntax.
-Include support for:
+Develop a prompt capable of generating a team structure based on user-provided input parameters. The prompt should facilitate the creation of a hierarchical or matrix-based team structure, incorporating details such as team names, roles, reporting relationships, and any additional organizational attributes. It should produce a clear and comprehensive representation of the team's composition and structure. enabling effective collaboration and communication within the organization
 
-Data retrieval (SELECT queries with filtering, ordering, and grouping).
-Data manipulation (INSERT, UPDATE, DELETE).
-Basic and complex conditions.
+Input
 
-Example Input:
-"Generate a SQL query to retrieve data from the 'Employees' table. Select the 'Name' and 'Salary' columns where the 'Department' column equals 'Sales' and the 'Salary' column is greater than 50000. Order the results by 'Salary' in descending order."
+I
+
+User will provide the project details and duration for which we need to suggest the team structure.
+
+Sample Input | For reference Purpose only)
+
+Create a team structure to develop the food ordering mobile application in 6 months
+
+Output
+
+A tree structure shall be displayed with Deliver Leader at the top, reporting Manager and then all the team members with their names, POD names and designations. Below a reference is shored
