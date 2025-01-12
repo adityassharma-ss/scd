@@ -1,6 +1,35 @@
-Understanding SOX
-The Sarbanes-Oxley Act (SOX), enacted in 2002, mandates stringent reforms to enhance corporate governance and accountability. It is particularly relevant for publicly traded companies, requiring them to implement robust internal controls over financial reporting.
-Key Sections
-Section 302: Requires management to certify the accuracy of financial reports.
-Section 404: Mandates an annual assessment of internal controls over financial reporting.
-Section 409: Requires timely disclosures of material changes in financial condition.
+Core SOX Requirements for Database Management
+
+Access Control Management
+
+Segregation of duties (SoD).
+
+User access provisioning and de-provisioning protocols.
+
+Privileged access management.
+
+Regular access review cycles.
+
+Change Management
+
+Database schema change control.
+
+Version control and documentation standards.
+
+Emergency change protocols.
+
+Data Integrity and Security
+
+Data backup and recovery requirements.
+
+Encryption standards for sensitive data.
+
+Data retention and archival policies.
+
+Audit Trail Requirements
+
+Logging all database modifications.
+
+User activity monitoring.
+
+Audit log retention periods.
