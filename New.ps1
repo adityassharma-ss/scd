@@ -39,9 +39,16 @@ foreach ($server in $WindowsServers) {
             # Parse monitor configuration
             try {
                 [xml]$config = $monitor.Configuration
-                $threshold = $config.SelectSingleNode("//Threshold")?.InnerText ?? "N/A"
-                $intervalSeconds = $config.SelectSingleNode("//IntervalSeconds")?.InnerText ?? "N/A"
-                $timeoutSeconds = $config.SelectSingleNode("//TimeoutSeconds")?.InnerText ?? "N/A"
+                
+                # Safe way to get values without null conditional operator
+                $thresholdNode = $config.SelectSingleNode("//Threshold")
+                $threshold = if ($thresholdNode) { $thresholdNode.InnerText } else { "N/A" }
+                
+                $intervalNode = $config.SelectSingleNode("//IntervalSeconds")
+                $intervalSeconds = if ($intervalNode) { $intervalNode.InnerText } else { "N/A" }
+                
+                $timeoutNode = $config.SelectSingleNode("//TimeoutSeconds")
+                $timeoutSeconds = if ($timeoutNode) { $timeoutNode.InnerText } else { "N/A" }
                 
                 [void]$content.Add("    - Threshold: $threshold")
                 [void]$content.Add("    - Interval Seconds: $intervalSeconds")
@@ -66,8 +73,13 @@ foreach ($server in $WindowsServers) {
             # Parse rule configuration
             try {
                 [xml]$config = $rule.Configuration
-                $intervalSeconds = $config.SelectSingleNode("//IntervalSeconds")?.InnerText ?? "N/A"
-                $timeoutSeconds = $config.SelectSingleNode("//TimeoutSeconds")?.InnerText ?? "N/A"
+                
+                # Safe way to get values without null conditional operator
+                $intervalNode = $config.SelectSingleNode("//IntervalSeconds")
+                $intervalSeconds = if ($intervalNode) { $intervalNode.InnerText } else { "N/A" }
+                
+                $timeoutNode = $config.SelectSingleNode("//TimeoutSeconds")
+                $timeoutSeconds = if ($timeoutNode) { $timeoutNode.InnerText } else { "N/A" }
                 
                 [void]$content.Add("    - Interval Seconds: $intervalSeconds")
                 [void]$content.Add("    - Timeout Seconds: $timeoutSeconds")
