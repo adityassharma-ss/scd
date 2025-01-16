@@ -1,97 +1,46 @@
-To generate Meeting Minutes (MOM) and Action Items from a meeting transcript, we can use natural language processing (NLP) techniques to extract important information such as discussions, decisions, and action items.
-
-Approach:
-
-1. Extract text from the transcript: We need to read the transcript, which could be in a PDF or text format. We'll use PyPDF2 for PDF files and simple file reading for text files.
-
-
-2. Identify key discussions: Use NLP tools like spaCy or nltk to identify action items, deliverables, and other important details like tasks, decisions, and owners.
-
-
-3. Format the output: Generate structured MOM (Minutes of Meeting) and list the action items.
-
-
-
-Here is an implementation of the solution:
-
 import re
-import PyPDF2
-import spacy
-from collections import defaultdict
+from graphviz import Digraph
 
-# Load spaCy NLP model
-nlp = spacy.load("en_core_web_sm")
+def extract_tasks(description):
+    tasks = []
+    task_pattern = r"([A-Za-z0-9\s]+(?:task|action|step)[A-Za-z0-9\s]*)"
+    matches = re.findall(task_pattern, description)
+    tasks = [match.strip() for match in matches]
+    return tasks
 
-def extract_text_from_pdf(pdf_path):
-    with open(pdf_path, 'rb') as file:
-        pdf_reader = PyPDF2.PdfReader(file)
-        text = ""
-        for page in pdf_reader.pages:
-            text += page.extract_text()
-        return text
+def extract_dependencies(description):
+    dependencies = []
+    dependency_pattern = r"(Task\s+\d+)\s+depends\s+on\s+(Task\s+\d+)"
+    matches = re.findall(dependency_pattern, description)
+    dependencies = [(match[0], match[1]) for match in matches]
+    return dependencies
 
-def extract_mom_and_actions(transcript_text):
-    mom = []
-    action_items = []
+def generate_flow_diagram(tasks, dependencies):
+    dot = Digraph(format='png')
+    for task in tasks:
+        dot.node(task)
+    for dep in dependencies:
+        dot.edge(dep[0], dep[1])
+    diagram_path = '/tmp/flow_diagram'
+    dot.render(diagram_path)
+    return f"{diagram_path}.png"
 
-    # Process text using spaCy
-    doc = nlp(transcript_text)
+def process_jira_description(description):
+    tasks = extract_tasks(description)
+    dependencies = extract_dependencies(description)
+    diagram_path = generate_flow_diagram(tasks, dependencies)
+    return diagram_path
 
-    for sent in doc.sents:
-        # Example logic for detecting action items (simple keyword-based)
-        if 'action item' in sent.text.lower() or 'deliverable' in sent.text.lower() or 'task' in sent.text.lower():
-            action_items.append(sent.text.strip())
-        else:
-            mom.append(sent.text.strip())
+description = """
+Task 1: Initiate user login process.
+Task 2: Validate user credentials.
+Task 3: Create user session after validation.
+Task 4: Display user dashboard.
+Task 5: Logout user.
+Task 3 depends on Task 2.
+Task 4 depends on Task 3.
+Task 5 depends on Task 4.
+"""
 
-    return mom, action_items
-
-def process_transcript(pdf_path):
-    transcript_text = extract_text_from_pdf(pdf_path)
-    mom, action_items = extract_mom_and_actions(transcript_text)
-
-    print("Minutes of Meeting (MOM):\n")
-    for item in mom:
-        print(f"- {item}")
-
-    print("\nAction Items:\n")
-    for action in action_items:
-        print(f"- {action}")
-
-pdf_path = 'path_to_transcript.pdf'  # Replace with actual transcript path
-process_transcript(pdf_path)
-
-Explanation:
-
-1. extract_text_from_pdf: Extracts text from the given PDF file using the PyPDF2 library.
-
-
-2. extract_mom_and_actions: Uses the spaCy NLP model to process the transcript and identify key sentences related to MOM and action items. It checks for keywords like 'action item', 'deliverable', and 'task' to identify action items.
-
-
-3. process_transcript: The main function that extracts text from the PDF and processes it to generate MOM and action items. The output is printed to the console.
-
-
-
-Notes:
-
-Keywords for Action Items: The script uses simple keyword-based detection to identify action items, but you can further refine this by using more sophisticated NLP techniques like dependency parsing, named entity recognition (NER), and task-related verb patterns.
-
-Transcript Format: This solution assumes the transcript is relatively structured. If the transcript is not structured (e.g., contains unstructured chat dialogue), further preprocessing (like speaker identification or sentence segmentation) would be needed.
-
-spaCy: You need to install the spaCy model before using the script:
-
-pip install spacy
-python -m spacy download en_core_web_sm
-
-
-Libraries Needed:
-
-PyPDF2 for PDF text extraction
-
-spaCy for natural language processing
-
-
-You can also modify this approach for different formats, such as plain text, by simply changing the input handling logic.
-
-
+diagram_path = process_jira_description(description)
+print(f"Flow diagram generated at: {diagram_path}")
