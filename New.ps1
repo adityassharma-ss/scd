@@ -1,77 +1,57 @@
-import re
+import pandas as pd
+from datetime import datetime, timedelta
 
-# Movie database
-MOVIES = [
-    {
-        "title": "No.20 Madras Mail",
-        "year": 1990,
-        "genre": "Thriller",
-        "language": "Malayalam",
-        "cast": ["Mohanlal", "Mammootty", "Suchitra"],
-        "director": "Joshiy",
-    },
-    {
-        "title": "Manichitrathazhu",
-        "year": 1993,
-        "genre": "Psychological Thriller",
-        "language": "Malayalam",
-        "cast": ["Mohanlal", "Shobhana", "Suresh Gopi"],
-        "director": "Fazil",
-    },
-    {
-        "title": "Drishyam",
-        "year": 2013,
-        "genre": "Thriller",
-        "language": "Malayalam",
-        "cast": ["Mohanlal", "Meena"],
-        "director": "Jeethu Joseph",
-    },
-    {
-        "title": "Inception",
-        "year": 2010,
-        "genre": "Science Fiction",
-        "language": "English",
-        "cast": ["Leonardo DiCaprio", "Joseph Gordon-Levitt", "Elliot Page"],
-        "director": "Christopher Nolan",
-    },
-    # Add more movies as needed
-]
+def load_transaction_data(file_path):
+    return pd.read_excel(file_path)
 
-def preprocess_input(user_input):
-    """Preprocess user input for better matching."""
-    return user_input.lower()
+def detect_fraudulent_transactions(data):
+    data['Timestamp'] = pd.to_datetime(data['Timestamp'])
+    fraud_transactions = []
+    for index, row in data.iterrows():
+        customer_id = row['Customer_ID']
+        transaction_time = row['Timestamp']
+        amount = row['Amount']
+        location = row['Location']
+        if amount > 50000:
+            fraud_transactions.append(row)
+            continue
+        recent_transactions = data[
+            (data['Customer_ID'] == customer_id) &
+            (data['Timestamp'] >= transaction_time - timedelta(minutes=5)) &
+            (data['Timestamp'] <= transaction_time)
+        ]
+        if len(recent_transactions) > 3:
+            fraud_transactions.append(row)
+            continue
+        daily_transactions = data[
+            (data['Customer_ID'] == customer_id) &
+            (data['Timestamp'].dt.date == transaction_time.date())
+        ]
+        if len(daily_transactions) > 10:
+            fraud_transactions.append(row)
+            continue
+        prev_transaction = data[
+            (data['Customer_ID'] == customer_id) &
+            (data['Timestamp'] < transaction_time)
+        ].sort_values(by='Timestamp').tail(1)
+        if not prev_transaction.empty and prev_transaction.iloc[0]['Location'] != location:
+            fraud_transactions.append(row)
+    return pd.DataFrame(fraud_transactions).drop_duplicates()
 
-def find_movies(user_input):
-    """Find matching movies based on user input."""
-    user_input = preprocess_input(user_input)
-    matching_movies = []
-
-    for movie in MOVIES:
-        # Check for matches in genre, year, language, or cast
-        if (
-            re.search(movie["genre"].lower(), user_input) or
-            str(movie["year"]) in user_input or
-            movie["language"].lower() in user_input or
-            any(cast_member.lower() in user_input for cast_member in movie["cast"])
-        ):
-            matching_movies.append(movie)
-    
-    return matching_movies
+def save_fraudulent_transactions(fraud_data, output_file):
+    fraud_data.to_excel(output_file, index=False)
+    print(f"Fraudulent transactions saved to {output_file}")
 
 def main():
-    print("Welcome to the Movie Recommendation System!")
-    user_input = input("Describe the movie you want to watch (e.g., genre, year, language, cast): ")
-    
-    recommendations = find_movies(user_input)
-    
-    if recommendations:
-        print("\nHere are some movie recommendations based on your input:")
-        for movie in recommendations:
-            print(f"- {movie['title']} ({movie['year']}) - {movie['genre']} in {movie['language']}")
-            print(f"  Cast: {', '.join(movie['cast'])}")
-            print(f"  Directed by: {movie['director']}\n")
+    input_file = input("Enter the path to the input Excel file: ")
+    output_file = input("Enter the path to save the fraudulent transactions: ")
+    data = load_transaction_data(input_file)
+    fraud_data = detect_fraudulent_transactions(data)
+    if fraud_data.empty:
+        print("No fraudulent transactions detected.")
     else:
-        print("\nSorry, no movies match your criteria. Try refining your search!")
+        print(f"Detected {len(fraud_data)} fraudulent transactions.")
+        save_fraudulent_transactions(fraud_data, output_file)
 
 if __name__ == "__main__":
     main()
