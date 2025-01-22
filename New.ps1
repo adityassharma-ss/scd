@@ -1,50 +1,71 @@
+import requests
+from bs4 import BeautifulSoup
+import random
+import re
 
-import pandas as pd
-import PyPDF2
+def fetch_content(url):
+    """Fetch and clean content from a URL."""
+    response = requests.get(url)
+    soup = BeautifulSoup(response.content, 'html.parser')
+    text = soup.get_text()
+    # Clean and return content
+    return re.sub(r'\s+', ' ', text).strip()
 
-def extract_skills_from_pdf(pdf_path):
-    """Extract text from the PDF file and return a set of required skills."""
-    with open(pdf_path, 'rb') as file:
-        reader = PyPDF2.PdfReader(file)
-        jd_text = " ".join(page.extract_text() for page in reader.pages)
+def generate_questions(content, num_questions, complexity, q_type, order):
+    """Generate questions based on the given parameters."""
+    sentences = content.split('. ')
+    random.shuffle(sentences)
     
-    # Simulate extracting skills from the JD text
-    required_skills = {"SQL", "ETL", "Data Engineering", "Python"}  # Example skills
-    return required_skills
-
-def clean_skills(skills_str):
-    """Clean and convert the skills string into a set."""
-    return set(map(str.strip, skills_str.split(',')))
-
-def read_candidates_from_excel(excel_path):
-    """Read the Excel file and return a DataFrame of candidates and their skills."""
-    df = pd.read_excel(excel_path, usecols=["Name", "Tehcnical Skills"], engine="openpyxl")
-    df.dropna(subset=["Name", "Tehcnical Skills"], inplace=True)
-    df['Tehcnical Skills'] = df['Tehcnical Skills'].apply(clean_skills)
-    return df
-
-def match_skills(jd_skills, candidates_df):
-    """Match JD skills with candidate skills and return qualified candidates."""
-    matched_candidates = []
-    for _, row in candidates_df.iterrows():
-        candidate_name = row['Name']
-        candidate_skills = row['Tehcnical Skills']
-        if jd_skills & candidate_skills:  # Check for skill intersection
-            matched_candidates.append(candidate_name)
-    return matched_candidates
+    # Filter sentences by complexity (e.g., based on length or keywords)
+    if complexity == "easy":
+        sentences = [s for s in sentences if len(s.split()) < 15]
+    elif complexity == "hard":
+        sentences = [s for s in sentences if len(s.split()) > 15]
+    
+    # Generate questions
+    questions = []
+    for i in range(min(num_questions, len(sentences))):
+        sentence = sentences[i]
+        question = f"Q{i + 1}: What is the main idea of this statement?\n - {sentence.strip()}"
+        
+        # Add options based on type
+        if q_type in ["select", "both"]:
+            options = [f"Option {chr(65 + j)}: {random.choice(sentences).strip()}" for j in range(3)]
+            options.append(f"Option {chr(65 + len(options))}: {sentence.strip()}")
+            random.shuffle(options)
+            question += "\n" + "\n".join(options)
+        
+        if q_type == "multi-select":
+            options = [f"Option {chr(65 + j)}: {random.choice(sentences).strip()}" for j in range(4)]
+            question += "\n" + "\n".join(options)
+        
+        questions.append(question)
+    
+    # Sort questions by complexity if needed
+    if order == "increasing":
+        questions = sorted(questions, key=lambda x: len(x.split()))
+    elif order == "decreasing":
+        questions = sorted(questions, key=lambda x: len(x.split()), reverse=True)
+    
+    return questions
 
 def main():
-    jd_pdf_path = 'Assignment 16-Input.pdf'
-    excel_path = 'Assignment 16-Input Excel.xlsx'
+    # Sample input
+    url = input("Enter the URL or Topic: ")
+    num_questions = int(input("Number of questions: "))
+    complexity = input("Complexity level (easy/medium/hard): ").lower()
+    q_type = input("Type of questions (select/multi-select/both): ").lower()
+    order = input("Order of complexity (none/increasing/decreasing): ").lower()
     
-    jd_skills = extract_skills_from_pdf(jd_pdf_path)
-    candidates_df = read_candidates_from_excel(excel_path)
+    # Fetch and process content
+    content = fetch_content(url)
+    questions = generate_questions(content, num_questions, complexity, q_type, order)
     
-    qualified_candidates = match_skills(jd_skills, candidates_df)
-    
-    print("Qualified Candidates:")
-    for candidate in qualified_candidates:
-        print(candidate)
+    # Display questions
+    print("\nGenerated Questions:\n")
+    for q in questions:
+        print(q)
+        print()
 
 if __name__ == "__main__":
     main()
