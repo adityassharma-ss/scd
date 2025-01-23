@@ -1,114 +1,90 @@
-# MMA Configuration Script
+# Automated MMA Configuration Script
 
-# Logging Function
-function Write-Log {
-    param(
-        [Parameter(Mandatory=$true)][string]$Message,
-        [Parameter(Mandatory=$false)][string]$Type = "Info"
-    )
-    
-    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-    switch ($Type) {
-        "Success" { Write-Host "[$timestamp] [SUCCESS] $Message" -ForegroundColor Green }
-        "Error" { Write-Host "[$timestamp] [ERROR] $Message" -ForegroundColor Red }
-        "Warning" { Write-Host "[$timestamp] [WARNING] $Message" -ForegroundColor Yellow }
-        default { Write-Host "[$timestamp] [INFO] $Message" }
-    }
+# User Input
+$ServerName = Read-Host "Enter the server name (e.g., localhost)"
+$ManagementGroupName = Read-Host "Enter the Management Group name"
+$PrimaryManagementServer = Read-Host "Enter the Primary Management Server name"
+$Port = Read-Host "Enter the Port number (default is 5723)"
+
+# Default port if not provided
+if (-not $Port) {
+    $Port = "5723"
 }
 
-# Check MMA Installation Function
-function Verify-MMAInstallation {
-    $mmaServices = @(
-        "Microsoft Monitoring Agent",
-        "HealthService"
-    )
-
-    foreach ($serviceName in $mmaServices) {
-        $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
-        if ($service) {
-            Write-Log "MMA Service '$serviceName' found" -Type "Success"
-            return $true
-        }
-    }
-
-    Write-Log "Microsoft Monitoring Agent services not found" -Type "Error"
-    return $false
-}
-
-# Configure Management Group Function
-function Configure-ManagementGroup {
-    param(
-        [Parameter(Mandatory=$true)][string]$ManagementGroupName,
-        [Parameter(Mandatory=$true)][string]$PrimaryManagementServer,
-        [Parameter(Mandatory=$false)][string]$Port = "5723"
-    )
-
-    try {
-        # Path to AgentConfig.exe
-        $agentConfigPath = "C:\Program Files\Microsoft Monitoring Agent\Agent\AgentConfig.exe"
-        
-        if (-not (Test-Path $agentConfigPath)) {
-            Write-Log "AgentConfig.exe not found. Check MMA installation." -Type "Error"
-            return $false
-        }
-
-        # Unregister existing management groups
-        Start-Process $agentConfigPath -ArgumentList "/d" -Wait -NoNewWindow
-
-        # Configure new management group
-        $configResult = Start-Process $agentConfigPath -ArgumentList "/c:$ManagementGroupName /s:$PrimaryManagementServer /p:$Port" -Wait -NoNewWindow -PassThru
-
-        if ($configResult.ExitCode -eq 0) {
-            Write-Log "Management Group configured successfully" -Type "Success"
-            return $true
-        }
-        else {
-            Write-Log "Management Group configuration failed. Exit Code: $($configResult.ExitCode)" -Type "Error"
-            return $false
-        }
-    }
-    catch {
-        Write-Log "Error configuring Management Group: $_" -Type "Error"
+# Function to Check MMA Installation
+function Check-MMAInstalled {
+    if (Get-Service "HealthService" -ErrorAction SilentlyContinue) {
+        Write-Host "Microsoft Monitoring Agent (MMA) is installed on $ServerName." -ForegroundColor Green
+        return $true
+    } else {
+        Write-Host "Microsoft Monitoring Agent (MMA) is NOT installed. Please install it first!" -ForegroundColor Red
         return $false
     }
 }
 
-# Main Execution Function
-function Main {
-    # Elevation check
-    if (-NOT ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")) {
-        Write-Log "Please run as Administrator" -Type "Error"
-        return
-    }
+# Function to Configure Management Group
+function Configure-ManagementGroup {
+    $RegistryBasePath = "HKLM:\SOFTWARE\Microsoft\Microsoft Operations Manager\3.0\Agent Management Groups"
+    $RegistryPath = "$RegistryBasePath\$ManagementGroupName"
 
-    # Verify MMA Installation
-    if (-not (Verify-MMAInstallation)) {
-        Write-Log "Cannot proceed. MMA not installed." -Type "Error"
-        return
-    }
+    # Check if the Management Group already exists
+    if (Test-Path $RegistryPath) {
+        Write-Host "Management Group '$ManagementGroupName' already exists. Verifying details..." -ForegroundColor Yellow
 
-    # User Input
-    $ManagementGroupName = Read-Host "Enter Management Group Name"
-    $PrimaryManagementServer = Read-Host "Enter Primary Management Server Name"
-    $Port = Read-Host "Enter Port (default 5723)" 
-    $Port = if ([string]::IsNullOrWhiteSpace($Port)) { "5723" } else { $Port }
+        # Check if the server and port match
+        $ExistingServer = (Get-ItemProperty -Path $RegistryPath -Name ManagementServer -ErrorAction SilentlyContinue).ManagementServer
+        $ExistingPort = (Get-ItemProperty -Path $RegistryPath -Name ManagementServerPort -ErrorAction SilentlyContinue).ManagementServerPort
 
-    # Configure Management Group
-    $configSuccess = Configure-ManagementGroup -ManagementGroupName $ManagementGroupName `
-                                               -PrimaryManagementServer $PrimaryManagementServer `
-                                               -Port $Port
-
-    # Restart Service if Configuration Successful
-    if ($configSuccess) {
-        try {
-            Restart-Service "HealthService" -Force
-            Write-Log "HealthService restarted successfully" -Type "Success"
+        if ($ExistingServer -eq $PrimaryManagementServer -and $ExistingPort -eq $Port) {
+            Write-Host "Management Group is already correctly configured." -ForegroundColor Green
+        } else {
+            Write-Host "Updating Management Group details..." -ForegroundColor Yellow
+            Set-ItemProperty -Path $RegistryPath -Name ManagementServer -Value $PrimaryManagementServer
+            Set-ItemProperty -Path $RegistryPath -Name ManagementServerPort -Value $Port
+            Write-Host "Management Group updated successfully." -ForegroundColor Green
         }
-        catch {
-            Write-Log "Failed to restart HealthService" -Type "Error"
+    } else {
+        Write-Host "Adding new Management Group '$ManagementGroupName'..." -ForegroundColor Yellow
+        New-Item -Path $RegistryBasePath -Name $ManagementGroupName -Force | Out-Null
+        Set-ItemProperty -Path $RegistryPath -Name ManagementServer -Value $PrimaryManagementServer
+        Set-ItemProperty -Path $RegistryPath -Name ManagementServerPort -Value $Port
+        Write-Host "Management Group added successfully." -ForegroundColor Green
+    }
+}
+
+# Function to Restart MMA Service
+function Restart-MMAService {
+    Write-Host "Restarting Microsoft Monitoring Agent service..." -ForegroundColor Yellow
+    try {
+        Restart-Service "HealthService" -Force -ErrorAction Stop
+        Write-Host "Service restarted successfully." -ForegroundColor Green
+    } catch {
+        Write-Host "Failed to restart the service. Please restart it manually." -ForegroundColor Red
+    }
+}
+
+# Function to Check MMA Service Status
+function Check-MMAServiceStatus {
+    $Service = Get-Service "HealthService" -ErrorAction SilentlyContinue
+    if ($Service.Status -eq "Running") {
+        Write-Host "Microsoft Monitoring Agent service is running." -ForegroundColor Green
+    } else {
+        Write-Host "Microsoft Monitoring Agent service is not running. Attempting to start it..." -ForegroundColor Yellow
+        Start-Service "HealthService" -ErrorAction SilentlyContinue
+        if ((Get-Service "HealthService").Status -eq "Running") {
+            Write-Host "Service started successfully." -ForegroundColor Green
+        } else {
+            Write-Host "Failed to start the service. Please start it manually." -ForegroundColor Red
         }
     }
 }
 
-# Run the script
-Main
+# Main Script Execution
+if (Check-MMAInstalled) {
+    Configure-ManagementGroup
+    Restart-MMAService
+    Check-MMAServiceStatus
+    Write-Host "Configuration completed successfully on $ServerName." -ForegroundColor Green
+} else {
+    Write-Host "Exiting script. Install Microsoft Monitoring Agent and re-run." -ForegroundColor Red
+}
