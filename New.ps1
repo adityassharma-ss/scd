@@ -1,110 +1,114 @@
-# Comprehensive MMA Configuration Script
+# MMA Configuration Script
 
 # Logging Function
-function Write-LogMessage {
+function Write-Log {
     param(
         [Parameter(Mandatory=$true)][string]$Message,
         [Parameter(Mandatory=$false)][string]$Type = "Info"
     )
     
     $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-    $logMessage = "[$timestamp] [$Type] $Message"
-    
     switch ($Type) {
-        "Success" { Write-Host $logMessage -ForegroundColor Green }
-        "Warning" { Write-Host $logMessage -ForegroundColor Yellow }
-        "Error" { Write-Host $logMessage -ForegroundColor Red }
-        default { Write-Host $logMessage }
+        "Success" { Write-Host "[$timestamp] [SUCCESS] $Message" -ForegroundColor Green }
+        "Error" { Write-Host "[$timestamp] [ERROR] $Message" -ForegroundColor Red }
+        "Warning" { Write-Host "[$timestamp] [WARNING] $Message" -ForegroundColor Yellow }
+        default { Write-Host "[$timestamp] [INFO] $Message" }
     }
-    
-    $logPath = "C:\Logs\MMAConfiguration.log"
-    if (-not (Test-Path (Split-Path $logPath))) {
-        New-Item -ItemType Directory -Path (Split-Path $logPath) -Force | Out-Null
-    }
-    Add-Content -Path $logPath -Value $logMessage
 }
 
-# Function to Configure MMA via Command Line Tool
-function Configure-MMAManagementGroup {
+# Check MMA Installation Function
+function Verify-MMAInstallation {
+    $mmaServices = @(
+        "Microsoft Monitoring Agent",
+        "HealthService"
+    )
+
+    foreach ($serviceName in $mmaServices) {
+        $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+        if ($service) {
+            Write-Log "MMA Service '$serviceName' found" -Type "Success"
+            return $true
+        }
+    }
+
+    Write-Log "Microsoft Monitoring Agent services not found" -Type "Error"
+    return $false
+}
+
+# Configure Management Group Function
+function Configure-ManagementGroup {
     param(
-        [Parameter(Mandatory=$true)][string]$ServerName,
         [Parameter(Mandatory=$true)][string]$ManagementGroupName,
         [Parameter(Mandatory=$true)][string]$PrimaryManagementServer,
         [Parameter(Mandatory=$false)][string]$Port = "5723"
     )
 
-    # Path to MMA Configuration Tool
-    $MMAConfigToolPath = "$env:ProgramFiles\Microsoft Monitoring Agent\Agent\MonitoringHost.exe"
-    
-    # Check if MMA is installed
-    if (-not (Test-Path $MMAConfigToolPath)) {
-        Write-LogMessage "Microsoft Monitoring Agent is not installed." -Type "Error"
-        return $false
-    }
-
     try {
-        # Unregister existing management groups (optional but recommended)
-        & "$env:ProgramFiles\Microsoft Monitoring Agent\Agent\AgentConfig.exe" /d
+        # Path to AgentConfig.exe
+        $agentConfigPath = "C:\Program Files\Microsoft Monitoring Agent\Agent\AgentConfig.exe"
+        
+        if (-not (Test-Path $agentConfigPath)) {
+            Write-Log "AgentConfig.exe not found. Check MMA installation." -Type "Error"
+            return $false
+        }
+
+        # Unregister existing management groups
+        Start-Process $agentConfigPath -ArgumentList "/d" -Wait -NoNewWindow
 
         # Configure new management group
-        $configCommand = "& '$env:ProgramFiles\Microsoft Monitoring Agent\Agent\AgentConfig.exe' /c:$ManagementGroupName /s:$PrimaryManagementServer /p:$Port"
-        Write-LogMessage "Executing configuration command: $configCommand" -Type "Info"
-        
-        $result = Invoke-Expression $configCommand
-        
-        # Check configuration result
-        if ($LASTEXITCODE -eq 0) {
-            Write-LogMessage "Management Group configured successfully." -Type "Success"
+        $configResult = Start-Process $agentConfigPath -ArgumentList "/c:$ManagementGroupName /s:$PrimaryManagementServer /p:$Port" -Wait -NoNewWindow -PassThru
+
+        if ($configResult.ExitCode -eq 0) {
+            Write-Log "Management Group configured successfully" -Type "Success"
             return $true
         }
         else {
-            Write-LogMessage "Failed to configure Management Group. Exit Code: $LASTEXITCODE" -Type "Error"
+            Write-Log "Management Group configuration failed. Exit Code: $($configResult.ExitCode)" -Type "Error"
             return $false
         }
     }
     catch {
-        Write-LogMessage "Configuration error: $_" -Type "Error"
+        Write-Log "Error configuring Management Group: $_" -Type "Error"
         return $false
     }
 }
 
-# Main Configuration Function
-function Main-MMAConfiguration {
-    # Ensure administrative privileges
+# Main Execution Function
+function Main {
+    # Elevation check
     if (-NOT ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")) {
-        Write-LogMessage "Please run this script as an Administrator." -Type "Error"
+        Write-Log "Please run as Administrator" -Type "Error"
         return
     }
 
-    # User Inputs
-    $ServerName = Read-Host "Enter the server name (e.g., localhost)"
-    $ManagementGroupName = Read-Host "Enter the Management Group name"
-    $PrimaryManagementServer = Read-Host "Enter the Primary Management Server name"
-    $Port = Read-Host "Enter the Port number (default is 5723)"
-    
-    # Set default port if not provided
-    if ([string]::IsNullOrWhiteSpace($Port)) {
-        $Port = "5723"
+    # Verify MMA Installation
+    if (-not (Verify-MMAInstallation)) {
+        Write-Log "Cannot proceed. MMA not installed." -Type "Error"
+        return
     }
 
-    # Configure Management Group
-    $configResult = Configure-MMAManagementGroup -ServerName $ServerName `
-                                                 -ManagementGroupName $ManagementGroupName `
-                                                 -PrimaryManagementServer $PrimaryManagementServer `
-                                                 -Port $Port
+    # User Input
+    $ManagementGroupName = Read-Host "Enter Management Group Name"
+    $PrimaryManagementServer = Read-Host "Enter Primary Management Server Name"
+    $Port = Read-Host "Enter Port (default 5723)" 
+    $Port = if ([string]::IsNullOrWhiteSpace($Port)) { "5723" } else { $Port }
 
-    # Restart MMA Service
-    if ($configResult) {
+    # Configure Management Group
+    $configSuccess = Configure-ManagementGroup -ManagementGroupName $ManagementGroupName `
+                                               -PrimaryManagementServer $PrimaryManagementServer `
+                                               -Port $Port
+
+    # Restart Service if Configuration Successful
+    if ($configSuccess) {
         try {
-            Write-LogMessage "Restarting Microsoft Monitoring Agent service..." -Type "Info"
             Restart-Service "HealthService" -Force
-            Write-LogMessage "Microsoft Monitoring Agent service restarted successfully." -Type "Success"
+            Write-Log "HealthService restarted successfully" -Type "Success"
         }
         catch {
-            Write-LogMessage "Failed to restart MMA service: $_" -Type "Error"
+            Write-Log "Failed to restart HealthService" -Type "Error"
         }
     }
 }
 
-# Execute the configuration
-Main-MMAConfiguration
+# Run the script
+Main
