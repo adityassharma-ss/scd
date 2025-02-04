@@ -1,7 +1,7 @@
 # Import the Operations Manager module
 Import-Module OperationsManager -ErrorAction Stop
 
-# Define management servers
+# Define Management Servers
 $ManagementServers = @("awswcanvaw0003", "awswcanvaw0002")
 
 # Define log file
@@ -15,29 +15,29 @@ function Write-Log {
     Write-Host "$Timestamp - $Message"
 }
 
-# Start logging
+# Start Logging
 Write-Log "=== SCOM Disk Space Monitoring Started ==="
 
 # Fetch all monitored Windows servers
 try {
-    $Servers = Get-SCOMClassInstance -Class (Get-SCOMClass -Name "Microsoft.Windows.Computer") | Where-Object { $_.Path -match "awswcanvaw" }
+    $Servers = Get-SCOMClassInstance -Class (Get-SCOMClass -Name "Microsoft.Windows.Computer") | Where-Object { $_.DisplayName -match "awswcanvaw" }
 } catch {
     Write-Log "❌ Error fetching monitored servers: $_"
     exit
 }
 
 if (-not $Servers) {
-    Write-Log "⚠️  No servers found matching AWSW primary management group."
+    Write-Log "⚠️ No servers found matching AWSW primary management group."
     exit
 }
 
 Write-Log "✅ Found $($Servers.Count) monitored servers."
 
-# Define alert thresholds (Modify as needed)
+# Define Alert Thresholds
 $WarningThreshold = 20  # Warning if free space < 20%
 $CriticalThreshold = 10 # Critical if free space < 10%
 
-# Fetch disk data from all monitored servers
+# Fetch Disk Data from Monitored Servers
 foreach ($Server in $Servers) {
     $ServerName = $Server.DisplayName
     Write-Log "🔍 Checking disk space on $ServerName..."
@@ -47,7 +47,7 @@ foreach ($Server in $Servers) {
         $Disks = Get-SCOMClassInstance -Class (Get-SCOMClass -Name "Microsoft.Windows.LogicalDisk") | Where-Object { $_.Path -match $ServerName }
         
         if (-not $Disks) {
-            Write-Log "⚠️  No disks found for $ServerName. Skipping."
+            Write-Log "⚠️ No disks found for $ServerName. Skipping."
             continue
         }
 
@@ -59,19 +59,19 @@ foreach ($Server in $Servers) {
 
             $AlertMessage = @"
 ---------------------------------------------
-🖥️  Server        : $ServerName
-💾 Disk          : $DiskName
-📊 Total Space  : $TotalSpaceMB MB
-🆓 Free Space   : $FreeSpaceMB MB ($FreePercentage%)
+🖥️  Server       : $ServerName
+💾 Disk         : $DiskName
+📊 Total Space : $TotalSpaceMB MB
+🆓 Free Space  : $FreeSpaceMB MB ($FreePercentage%)
 ---------------------------------------------
 "@
 
-            # Check threshold and simulate alerting logic
+            # Check Threshold and Simulate Alerting Logic
             if ($FreePercentage -lt $CriticalThreshold) {
                 Write-Log "🚨 CRITICAL ALERT: $DiskName on $ServerName is below $CriticalThreshold% free space!"
                 Write-Log $AlertMessage
             } elseif ($FreePercentage -lt $WarningThreshold) {
-                Write-Log "⚠️  WARNING: $DiskName on $ServerName is below $WarningThreshold% free space."
+                Write-Log "⚠️ WARNING: $DiskName on $ServerName is below $WarningThreshold% free space."
                 Write-Log $AlertMessage
             } else {
                 Write-Log "✅ OK: $DiskName on $ServerName has sufficient free space ($FreePercentage%)."
