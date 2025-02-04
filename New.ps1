@@ -2,41 +2,42 @@
 Import-Module OperationsManager
 
 # Define output file
-$OutputFile = "C:\DiskAlertRules.csv"
+$OutputFile = "C:\SCOM_DiskAlertRules.csv"
 
-# Get all monitors related to Disk
-$DiskMonitors = Get-SCOMMonitor | Where-Object { $_.DisplayName -match "Disk" -or $_.Target.DisplayName -match "Disk" }
+# Fetch all disk space-related monitors
+$DiskMonitors = Get-SCOMMonitor | Where-Object { $_.DisplayName -match "Disk Free Space" }
 
 # Initialize results array
 $Results = @()
 
 foreach ($Monitor in $DiskMonitors) {
-    # Get associated rules
-    $Rules = Get-SCOMRule | Where-Object { $_.Target -eq $Monitor.Target }
+    # Get Associated Overrides
+    $Overrides = Get-SCOMOverride | Where-Object { $_.Context -eq $Monitor.Target }
 
-    foreach ($Rule in $Rules) {
-        # Get Override values if any
-        $Overrides = Get-SCOMOverride | Where-Object { $_.Context -eq $Monitor.Target }
+    # Extract thresholds (Warning, Critical)
+    $WarningThreshold = "N/A"
+    $CriticalThreshold = "N/A"
 
-        # Get Default Threshold (if applicable)
-        $Threshold = "N/A"
-        if ($Monitor.Configuration -match '<Threshold>(.*?)</Threshold>') {
-            $Threshold = $matches[1]
-        }
+    if ($Monitor.Configuration -match '<UnderWarningThreshold>(.*?)</UnderWarningThreshold>') {
+        $WarningThreshold = $matches[1]
+    }
 
-        $Results += [PSCustomObject]@{
-            MonitorName     = $Monitor.DisplayName
-            RuleName        = $Rule.DisplayName
-            RuleID          = $Rule.Id
-            Enabled         = $Monitor.Enabled
-            TargetClass     = $Monitor.Target.DisplayName
-            Threshold       = $Threshold
-            OverrideRules   = ($Overrides | Select-Object Property, Value -ExpandProperty Value) -join "; "
-        }
+    if ($Monitor.Configuration -match '<OverErrorThreshold>(.*?)</OverErrorThreshold>') {
+        $CriticalThreshold = $matches[1]
+    }
+
+    # Store data in an array
+    $Results += [PSCustomObject]@{
+        MonitorName       = $Monitor.DisplayName
+        TargetClass       = $Monitor.Target.DisplayName
+        HealthState       = $Monitor.HealthState
+        WarningThreshold  = $WarningThreshold
+        CriticalThreshold = $CriticalThreshold
+        Overrides         = ($Overrides | Select-Object Property, Value -ExpandProperty Value) -join "; "
     }
 }
 
 # Export results to CSV
 $Results | Export-Csv -Path $OutputFile -NoTypeInformation
 
-Write-Host "✅ Disk Alert Configuration exported to $OutputFile"
+Write-Host "✅ Disk Space Alert Configuration exported to $OutputFile"
