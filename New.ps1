@@ -1,7 +1,7 @@
 # Import the Operations Manager module
 Import-Module OperationsManager -ErrorAction Stop
 
-# Define Management Servers
+# Define Management Servers (unused in current logic but retained for reference)
 $ManagementServers = @("awswcanvaw0003", "awswcanvaw0002")
 
 # Define log file
@@ -57,6 +57,7 @@ foreach ($Server in $Servers) {
             $TotalSpaceMB = [math]::Round($Disk.'Size Megabytes', 2)
             $FreePercentage = [math]::Round(($FreeSpaceMB / $TotalSpaceMB) * 100, 2)
 
+            # Properly formatted here-string
             $AlertMessage = @"
 ---------------------------------------------
 🖥️  Server       : $ServerName
