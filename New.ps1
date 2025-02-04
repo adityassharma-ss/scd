@@ -1,106 +1,119 @@
-# Import SCOM PowerShell module
-Import-Module OperationsManager
+# Import SCOM module (ensure it's available)
+Import-Module OperationsManager -ErrorAction Stop
 
-# Script Parameters
-param(
+# Script parameters
+param (
     [string]$OutputPath = "C:\SCOM_Reports",
-    [string]$ReportName = "DiskSpaceAlerts_$(Get-Date -Format 'yyyyMMdd')",
-    [int]$DaysToCheck = 7
+    [string]$OutputFile = "DiskAlertRules.csv",
+    [switch]$IncludeDisabled = $false,
+    [switch]$ExportToHTML = $false
 )
 
-# Create output directory if it doesn't exist
-if (!(Test-Path $OutputPath)) {
-    New-Item -ItemType Directory -Force -Path $OutputPath | Out-Null
+# Ensure output directory exists
+if (-not (Test-Path $OutputPath)) {
+    New-Item -ItemType Directory -Path $OutputPath | Out-Null
 }
+
+$FullOutputPath = Join-Path $OutputPath $OutputFile
 
 # Initialize logging
 $LogFile = Join-Path $OutputPath "DiskMonitor.log"
 function Write-Log {
-    param($Message)
-    $Timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-    $LogEntry = "$Timestamp - $Message"
-    Add-Content -Path $LogFile -Value $LogEntry
-    Write-Host $LogEntry
+    param([string]$Message)
+    $LogMessage = "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss'): $Message"
+    Add-Content -Path $LogFile -Value $LogMessage
+    Write-Host $Message
 }
 
 try {
-    Write-Log "Starting disk space alert collection from SCOM"
+    Write-Log "🔍 Fetching SCOM disk monitor configuration..."
 
-    # Connect to SCOM Management Server
-    $ManagementServer = Get-SCOMManagementServer | Where-Object {$_.IsGateway -eq $false} | Select-Object -First 1
-    
-    if (!$ManagementServer) {
-        throw "No SCOM Management Server found"
+    # Get all disk space-related monitors
+    $DiskMonitors = Get-SCOMMonitor | Where-Object { 
+        $_.DisplayName -match "Disk Free Space" -or 
+        $_.DisplayName -match "Logical Disk" -or
+        $_.DisplayName -match "Storage Space"
     }
 
-    # Get active alerts from recent days
-    $StartDate = (Get-Date).AddDays(-$DaysToCheck)
-    $Alerts = Get-SCOMAlert | Where-Object {
-        $_.ResolutionState -ne 255 -and
-        $_.TimeRaised -gt $StartDate -and
-        ($_.MonitoringObjectDisplayName -match "Logical Disk" -or
-         $_.MonitoringObjectDisplayName -match "Storage Space")
+    if (-not $DiskMonitors) {
+        throw "⚠ No disk monitors found in SCOM!"
     }
 
-    # Get all disk monitors for threshold information
-    $DiskMonitors = Get-SCOMMonitor | Where-Object {
-        $_.DisplayName -match "Logical Disk Free Space"
-    }
+    # Initialize results array
+    $Results = @()
 
-    # Prepare report data
-    $ReportData = foreach ($Alert in $Alerts) {
-        $Monitor = $DiskMonitors | Where-Object {$_.Id -eq $Alert.MonitoringRuleId}
-        
-        # Extract thresholds from monitor configuration
-        $WarningThreshold = "N/A"
-        $CriticalThreshold = "N/A"
-        
-        if ($Monitor) {
-            $Config = $Monitor.Configuration
-            if ($Config -match '<WarningThreshold>(.*?)</WarningThreshold>') {
-                $WarningThreshold = $matches[1]
-            }
-            if ($Config -match '<CriticalThreshold>(.*?)</CriticalThreshold>') {
-                $CriticalThreshold = $matches[1]
+    foreach ($Monitor in $DiskMonitors) {
+        # Get Overrides (error handling included)
+        $Overrides = try {
+            Get-SCOMOverride | Where-Object { $_.Context -eq $Monitor.Target }
+        } catch {
+            Write-Log "⚠ Error fetching overrides for $($Monitor.DisplayName): $_"
+            $null
+        }
+
+        # Extract thresholds (Warning, Critical, Free Space, Time)
+        $Configuration = $Monitor.Configuration
+        $Thresholds = @{
+            Warning       = "N/A"
+            Critical      = "N/A"
+            FreeSpace     = "N/A"
+            TimeThreshold = "N/A"
+        }
+
+        $ThresholdPatterns = @{
+            Warning       = '<UnderWarningThreshold>(.*?)</UnderWarningThreshold>'
+            Critical      = '<OverErrorThreshold>(.*?)</OverErrorThreshold>'
+            FreeSpace     = '<MinimumFreeSpace>(.*?)</MinimumFreeSpace>'
+            TimeThreshold = '<TimeThreshold>(.*?)</TimeThreshold>'
+        }
+
+        foreach ($pattern in $ThresholdPatterns.GetEnumerator()) {
+            if ($Configuration -match $pattern.Value) {
+                $Thresholds[$pattern.Key] = $matches[1]
             }
         }
 
-        # Create report entry
-        [PSCustomObject]@{
-            TimeGenerated = $Alert.TimeRaised
-            Server = $Alert.MonitoringObjectDisplayName.Split('\')[0]
-            Drive = ($Alert.MonitoringObjectDisplayName -split '\\')[-1]
-            AlertName = $Alert.Name
-            Severity = switch($Alert.Severity) {
-                0 { "Information" }
-                1 { "Warning" }
-                2 { "Critical" }
-                default { "Unknown" }
-            }
-            WarningThreshold = $WarningThreshold
-            CriticalThreshold = $CriticalThreshold
-            Description = $Alert.Description -replace '\s+', ' '
-            RepeatCount = $Alert.RepeatCount
-            ResolutionState = switch($Alert.ResolutionState) {
-                0 { "New" }
-                1 { "Acknowledged" }
-                254 { "Resolved" }
-                255 { "Closed" }
-                default { $Alert.ResolutionState }
-            }
+        # Get Monitor State and Enabled Status
+        $MonitorState = try {
+            Get-SCOMMonitoringObject | Where-Object { $_.DisplayName -eq $Monitor.DisplayName } | Select-Object -ExpandProperty HealthState
+        } catch {
+            Write-Log "⚠ Error getting state for $($Monitor.DisplayName): $_"
+            "Unknown"
+        }
+
+        # Store data in an array
+        $Results += [PSCustomObject]@{
+            MonitorName       = $Monitor.DisplayName
+            TargetClass       = $Monitor.Target.DisplayName
+            HealthState       = $MonitorState
+            Enabled           = $Monitor.Enabled
+            WarningThreshold  = $Thresholds.Warning
+            CriticalThreshold = $Thresholds.Critical
+            MinimumFreeSpace  = $Thresholds.FreeSpace
+            TimeThreshold     = $Thresholds.TimeThreshold
+            LastModified      = $Monitor.LastModified
+            Overrides         = if ($Overrides) { ($Overrides | Select-Object Property, Value | ForEach-Object { "$($_.Property)=$($_.Value)" }) -join "; " } else { "None" }
         }
     }
 
-    # Export to CSV
-    $CSVPath = Join-Path $OutputPath "$ReportName.csv"
-    $ReportData | Export-Csv -Path $CSVPath -NoTypeInformation
-    Write-Log "Exported alert data to $CSVPath"
-    Write-Log "Total alerts exported: $($ReportData.Count)"
+    # Filter disabled monitors if not included
+    if (-not $IncludeDisabled) {
+        $Results = $Results | Where-Object { $_.Enabled -eq $true }
+    }
 
+    # Export results to CSV
+    $Results | Export-Csv -Path $FullOutputPath -NoTypeInformation
+
+    # Generate HTML report if requested
+    if ($ExportToHTML) {
+        $HTMLPath = $FullOutputPath -replace '\.csv$', '.html'
+        $HTMLContent = $Results | ConvertTo-Html -Title "SCOM Disk Monitor Configuration Report" -Pre "<h1>SCOM Disk Monitor Configuration Report</h1><p>Generated on $(Get-Date)</p>"
+        $HTMLContent | Out-File $HTMLPath
+        Write-Log "📄 HTML report exported to $HTMLPath"
+    }
+
+    Write-Log "✅ Export completed successfully to $FullOutputPath"
 } catch {
-    $ErrorMessage = "Error: $_"
-    Write-Log $ErrorMessage
-    throw $ErrorMessage
-} finally {
-    Write-Log "Script execution completed"
+    Write-Log "❌ Error: $_"
+    throw $_
 }
