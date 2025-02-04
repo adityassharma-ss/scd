@@ -1,9 +1,6 @@
 # Import the Operations Manager module
 Import-Module OperationsManager -ErrorAction Stop
 
-# Define Management Servers (unused in current logic but retained for reference)
-$ManagementServers = @("awswcanvaw0003", "awswcanvaw0002")
-
 # Define log file
 $LogFile = "C:\SCOM_Reports\SCOM_DiskAlerts.log"
 
