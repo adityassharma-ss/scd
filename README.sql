@@ -1,8 +1,9 @@
 SELECT 
+    'Status' AS metric, 
     CASE 
         WHEN MAX([SampleValue]) > 0 THEN 'Up' 
         ELSE 'Down' 
-    END AS Status
+    END AS value 
 FROM 
     [SCOMConfiguration].[dbo].[grafanaPerfReport02]
 WHERE 
