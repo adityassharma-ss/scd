@@ -1,9 +1,10 @@
 SELECT 
-    'Status' AS metric, 
+    $_timeEpoch([DateTime]) AS time, 
     CASE 
-        WHEN MAX([SampleValue]) > 0 THEN 'Up' 
+        WHEN [SampleValue] > 0 THEN 'Up' 
         ELSE 'Down' 
-    END AS value 
+    END AS value, 
+    [CounterName] AS metric
 FROM 
     [SCOMConfiguration].[dbo].[grafanaPerfReport02]
 WHERE 
@@ -11,3 +12,5 @@ WHERE
     AND [ObjectName] = 'System'
     AND [CounterName] = 'System Up Time'
     AND [Path] IN ($ServerName)
+ORDER BY 
+    [DateTime] ASC
