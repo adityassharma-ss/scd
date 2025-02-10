@@ -1,83 +1,63 @@
-# Import the Operations Manager module
-Import-Module OperationsManager -ErrorAction Stop
+# Load the SCOM module
+Import-Module OperationsManager
 
-# Define log file
-$LogFile = "C:\SCOM_Reports\SCOM_DiskAlerts.log"
+# Connect to SCOM Management Server (Optional, modify as needed)
+New-SCOMManagementGroupConnection -ComputerName "YourSCOMServer"
 
-# Function to log messages
-function Write-Log {
-    param([string]$Message)
-    $Timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-    "$Timestamp - $Message" | Out-File -Append -FilePath $LogFile
-    Write-Host "$Timestamp - $Message"
-}
+# Get all Web URL Monitoring Objects
+$monitoredObjects = Get-SCOMMonitoringObject | Where-Object { $_.DisplayName -match "^https?://" }
 
-# Start Logging
-Write-Log "=== SCOM Disk Space Monitoring Started ==="
+# Create an empty array for results
+$results = @()
 
-# Fetch all monitored Windows servers
-try {
-    $Servers = Get-SCOMClassInstance -Class (Get-SCOMClass -Name "Microsoft.Windows.Computer") | Where-Object { $_.DisplayName -match "awswcanvaw" }
-} catch {
-    Write-Log "❌ Error fetching monitored servers: $_"
-    exit
-}
-
-if (-not $Servers) {
-    Write-Log "⚠️ No servers found matching AWSW primary management group."
-    exit
-}
-
-Write-Log "✅ Found $($Servers.Count) monitored servers."
-
-# Define Alert Thresholds
-$WarningThreshold = 20  # Warning if free space < 20%
-$CriticalThreshold = 10 # Critical if free space < 10%
-
-# Fetch Disk Data from Monitored Servers
-foreach ($Server in $Servers) {
-    $ServerName = $Server.DisplayName
-    Write-Log "🔍 Checking disk space on $ServerName..."
-
-    try {
-        # Fetch Logical Disks monitored by SCOM
-        $Disks = Get-SCOMClassInstance -Class (Get-SCOMClass -Name "Microsoft.Windows.LogicalDisk") | Where-Object { $_.Path -match $ServerName }
-        
-        if (-not $Disks) {
-            Write-Log "⚠️ No disks found for $ServerName. Skipping."
-            continue
-        }
-
-        foreach ($Disk in $Disks) {
-            $DiskName = $Disk.DisplayName
-            $FreeSpaceMB = [math]::Round($Disk.'Free Megabytes', 2)
-            $TotalSpaceMB = [math]::Round($Disk.'Size Megabytes', 2)
-            $FreePercentage = [math]::Round(($FreeSpaceMB / $TotalSpaceMB) * 100, 2)
-
-            # Properly formatted here-string
-            $AlertMessage = @"
----------------------------------------------
-🖥️  Server       : $ServerName
-💾 Disk         : $DiskName
-📊 Total Space : $TotalSpaceMB MB
-🆓 Free Space  : $FreeSpaceMB MB ($FreePercentage%)
----------------------------------------------
-"@
-
-            # Check Threshold and Simulate Alerting Logic
-            if ($FreePercentage -lt $CriticalThreshold) {
-                Write-Log "🚨 CRITICAL ALERT: $DiskName on $ServerName is below $CriticalThreshold% free space!"
-                Write-Log $AlertMessage
-            } elseif ($FreePercentage -lt $WarningThreshold) {
-                Write-Log "⚠️ WARNING: $DiskName on $ServerName is below $WarningThreshold% free space."
-                Write-Log $AlertMessage
-            } else {
-                Write-Log "✅ OK: $DiskName on $ServerName has sufficient free space ($FreePercentage%)."
-            }
-        }
-    } catch {
-        Write-Log "❌ Error checking disks on $ServerName: $_"
+# Process each monitored object
+foreach ($object in $monitoredObjects) {
+    $results += [PSCustomObject]@{
+        URL         = $object.DisplayName
+        State       = $object.HealthState
+        Path        = $object.FullName
     }
 }
 
-Write-Log "✅ SCOM Disk Monitoring Completed."
+# Define Excel File Path
+$ExcelFile = "C:\SCOM_Monitored_URLs.xlsx"
+
+# Create Excel COM Object
+$Excel = New-Object -ComObject Excel.Application
+$Excel.Visible = $false
+$Excel.DisplayAlerts = $false
+$Workbook = $Excel.Workbooks.Add()
+$Sheet = $Workbook.Sheets.Item(1)
+
+# Add Headers
+$Sheet.Cells.Item(1,1) = "URL"
+$Sheet.Cells.Item(1,2) = "State"
+$Sheet.Cells.Item(1,3) = "Path"
+
+# Format Headers
+$HeaderRange = $Sheet.Range("A1:C1")
+$HeaderRange.Font.Bold = $true
+$HeaderRange.Interior.ColorIndex = 15  # Light Gray Background
+
+# Insert Data
+$row = 2
+foreach ($entry in $results) {
+    $Sheet.Cells.Item($row,1) = $entry.URL
+    $Sheet.Cells.Item($row,2) = $entry.State
+    $Sheet.Cells.Item($row,3) = $entry.Path
+    $row++
+}
+
+# Autofit Columns
+$Sheet.Columns.AutoFit()
+
+# Save and Close Excel
+$Workbook.SaveAs($ExcelFile)
+$Excel.Quit()
+
+# Cleanup COM Objects
+[System.Runtime.Interopservices.Marshal]::ReleaseComObject($Sheet) | Out-Null
+[System.Runtime.Interopservices.Marshal]::ReleaseComObject($Workbook) | Out-Null
+[System.Runtime.Interopservices.Marshal]::ReleaseComObject($Excel) | Out-Null
+
+Write-Host "Exported $($results.Count) URLs to $ExcelFile"
