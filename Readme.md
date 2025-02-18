@@ -10,10 +10,12 @@ Update the prometheus.yml configuration file to add new scrape targets. For exam
 yaml
 Copy
 Edit
+```
 scrape_configs:
   - job_name: 'node_exporter'
     static_configs:
       - targets: ['server1:9100', 'server2:9100', ...]
+```
 Ensure that Prometheus is able to reach all Node Exporter endpoints, adjusting firewall rules if needed.
 Grafana & Alertmanager Setup:
 
