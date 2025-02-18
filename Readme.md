@@ -1,6 +1,7 @@
-Data Flow
-Node Exporter runs on every Linux server and exposes metrics on port 9100.
-Prometheus scrapes data from all Node Exporter instances at regular intervals.
-Prometheus stores the time-series data for historical analysis.
-Alertmanager triggers alerts based on predefined rules (e.g., high CPU usage, disk failure).
-Grafana queries Prometheus to create dashboards and visualize real-time server performance.
+A. Deploy Node Exporter on All Linux Servers
+Installation Steps (Automated using Ansible):
+
+Download Node Exporter binary on each Linux server.
+Extract the binary and move it to /usr/local/bin/.
+Create a systemd service to ensure Node Exporter runs at startup.
+Enable the service and verify it is exposing metrics on http://localhost:9100/metrics.
