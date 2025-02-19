@@ -4,9 +4,9 @@
 
 Integrating **Azure Monitor** with **Grafana** enables organizations to visualize and analyze metrics from Azure resources in real-time. This integration offers a unified monitoring solution, enhancing operational efficiency and decision-making.
 
-## **2. Azure Monitor API Rate Limits**
+## **2. Azure Monitor API Rate Limits and Data Volume Handling**
 
-Understanding Azure Monitor's API rate limits is crucial for designing a scalable and efficient monitoring system.
+Understanding Azure Monitor's API rate limits and data volume constraints is crucial for designing a scalable and efficient monitoring system.
 
 ### **2.1. Azure Resource Manager (ARM) API Limits**
 
@@ -26,6 +26,23 @@ The Azure Monitor Metrics API has specific rate limits:
 - **Metrics Batch API**: 360,000 API calls per hour per subscription.
 
 The Metrics Batch API is designed for high-volume scenarios, allowing multiple metrics queries in a single request, thus optimizing performance and reducing the likelihood of throttling. ([learn.microsoft.com](https://learn.microsoft.com/en-us/answers/questions/1918789/what-are-the-rest-api-calls-per-hour-limitations?utm_source=chatgpt.com))
+
+### **2.3. Data Volume and Types of Metrics Available for Visualization**
+
+Azure Monitor provides a comprehensive set of metrics categorized as follows:
+
+#### **2.3.1. Platform (Standard) Metrics**
+- **Compute Metrics**: CPU usage, memory availability, disk I/O operations.
+- **Storage Metrics**: Total capacity used, number of transactions, ingress/egress data.
+- **Network Metrics**: Ingress and egress traffic, number of active connections.
+
+These metrics are pre-aggregated and stored with a default retention period of **93 days**, with up to **30 days** of data queryable in a single chart. ([learn.microsoft.com](https://learn.microsoft.com/en-us/azure/azure-monitor/essentials/data-platform-metrics?utm_source=chatgpt.com))
+
+#### **2.3.2. Custom Metrics**
+Users can define and collect custom metrics specific to their applications, such as user transactions or custom performance counters. Custom metrics are stored alongside platform metrics. ([learn.microsoft.com](https://learn.microsoft.com/en-us/azure/azure-monitor/essentials/metrics-custom-overview?utm_source=chatgpt.com))
+
+#### **2.3.3. Log-Based Metrics**
+Derived from log data, these metrics can be created by applying analytical queries to logs stored in Azure Monitor. They are useful for extracting insights from detailed logs. ([learn.microsoft.com](https://learn.microsoft.com/en-us/azure/azure-monitor/app/metrics-overview?utm_source=chatgpt.com))
 
 ## **3. Best Practices for Enterprise Integration**
 
