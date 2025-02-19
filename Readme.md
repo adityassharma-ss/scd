@@ -1,114 +1,134 @@
-
-Metrics Migration to Prometheus & Grafana
+Logs Migration to OpenSearch
 1. Overview
-We are migrating metrics stored in an Azure Storage Account to Prometheus & Grafana. This involves:
+We are migrating logs from an Azure Storage Account to OpenSearch for indexing and visualization.
 
-Extracting metrics from Azure Storage (CSV/JSON).
-Converting them into Prometheus-compatible format.
-Storing them in Prometheus.
-Visualizing them in Grafana.
-2. Architecture & Components
+Key Components:
+Log Ingestion: Read logs from Azure Storage.
+Parsing & Transformation: Convert logs into a structured format.
+Storage & Indexing: Store logs in OpenSearch.
+Visualization: Use OpenSearch Dashboards for log analysis.
+2. Architecture & Tools
 Component	Purpose
-Prometheus	Stores and scrapes metrics from an exporter.
-Exporter Service	Reads metrics from Azure Storage, converts them, and exposes /metrics endpoint.
-Grafana	Connects to Prometheus and visualizes metrics.
+Azure Storage	Source of raw logs (JSON, CSV, etc.)
+Logstash / Fluent Bit	Reads logs, processes them, and sends to OpenSearch
+OpenSearch	Stores and indexes logs
+OpenSearch Dashboards	Visualizes logs and queries data
 3. Deployment Setup
 3.1 Infrastructure
 Component	VM Size (Azure)	Notes
-Prometheus	Standard_B2s (2 vCPU, 4GB RAM)	Deployed on a VM, scrapes from exporter.
-Grafana	Standard_B2s (optional)	Can be installed on the same VM as Prometheus.
-Exporter Service	Standard_B1s	Runs a Python-based exporter service.
+OpenSearch	Standard_D4s_v3 (4 vCPU, 16GB RAM)	Stores & queries logs
+Logstash/Fluent Bit	Standard_B2s	Ingests logs and forwards to OpenSearch
+OpenSearch Dashboards	Standard_B2s	For visualization & analytics
 4. Migration Steps
-4.1 Setting Up Prometheus
-Deploy Prometheus on a VM
+4.1 Deploy OpenSearch
+Install OpenSearch on a VM
 sh
 Copy
 Edit
-sudo apt update && sudo apt install -y prometheus
-Configure prometheus.yml to scrape from the exporter:
+wget https://artifacts.opensearch.org/releases/bundle/opensearch/2.10.0/opensearch-2.10.0-linux-x64.tar.gz
+tar -xzf opensearch-2.10.0-linux-x64.tar.gz
+cd opensearch-2.10.0
+Configure OpenSearch (opensearch.yml)
 yaml
 Copy
 Edit
-
-```
-global:
-  scrape_interval: 15s
-scrape_configs:
-  - job_name: 'azure-exporter'
-    static_configs:
-      - targets: ['<Exporter_VM_IP>:8000']
-```
-
-Restart Prometheus
+cluster.name: opensearch-cluster
+network.host: 0.0.0.0
+discovery.type: single-node
+Start OpenSearch
 sh
 Copy
 Edit
-sudo systemctl restart prometheus
-4.2 Developing the Exporter Service
-Install Prometheus Python Client
+./opensearch-tar-install.sh
+4.2 Setup Log Ingestion (Fluent Bit or Logstash)
+Option 1: Fluent Bit (Lightweight)
+Install Fluent Bit
 sh
 Copy
 Edit
-pip install prometheus-client azure-storage-blob pandas
-Python Script to Read Metrics & Expose /metrics
-python
+curl -fsSL https://raw.githubusercontent.com/fluent/fluent-bit/master/install.sh | sh
+Configure Fluent Bit (fluent-bit.conf)
+ini
 Copy
 Edit
-from prometheus_client import start_http_server, Gauge
-from azure.storage.blob import BlobServiceClient
-import pandas as pd
-import time
-
-# Prometheus Metrics
-azure_metric = Gauge("azure_metric", "Sample metric from Azure", ["instance"])
-
-# Azure Storage Connection
-CONNECTION_STRING = "your_azure_storage_connection_string"
-CONTAINER_NAME = "metrics-container"
-BLOB_NAME = "metrics.csv"
-
-def fetch_metrics():
-    blob_service_client = BlobServiceClient.from_connection_string(CONNECTION_STRING)
-    blob_client = blob_service_client.get_blob_client(CONTAINER_NAME, BLOB_NAME)
-    
-    # Read Blob Content
-    data = blob_client.download_blob().content_as_text()
-    df = pd.read_csv(pd.compat.StringIO(data))
-    
-    for _, row in df.iterrows():
-        azure_metric.labels(instance=row["instance"]).set(row["value"])
-
-if __name__ == "__main__":
-    start_http_server(8000)
-    while True:
-        fetch_metrics()
-        time.sleep(15)
-Run the Exporter
+[INPUT]
+    Name azure_blob
+    StorageAccount your_storage_account
+    Container your_container_name
+    Key your_access_key
+[OUTPUT]
+    Name opensearch
+    Host <OpenSearch_IP>
+    Port 9200
+    Index logs
+    Type _doc
+Start Fluent Bit
 sh
 Copy
 Edit
-python exporter.py
-4.3 Connecting Grafana
-Install Grafana
+fluent-bit -c fluent-bit.conf
+Option 2: Logstash (More Features)
+Install Logstash
 sh
 Copy
 Edit
-sudo apt update && sudo apt install -y grafana
-sudo systemctl start grafana-server
-Add Prometheus as a Data Source
-Go to Grafana UI → Configuration → Data Sources → Add Prometheus.
-Set URL = http://<Prometheus_VM_IP>:9090.
-Create Dashboards
-Import existing Prometheus dashboards or create custom panels.
+sudo apt update && sudo apt install -y logstash
+Configure Logstash Pipeline (logstash.conf)
+ini
+Copy
+Edit
+input {
+  azure_blob_storage {
+    storage_account_name => "your_storage_account"
+    container_name => "your_container"
+    access_key => "your_access_key"
+  }
+}
+
+filter {
+  json {
+    source => "message"
+  }
+}
+
+output {
+  opensearch {
+    hosts => ["http://<OpenSearch_IP>:9200"]
+    index => "logs"
+  }
+}
+Start Logstash
+sh
+Copy
+Edit
+sudo systemctl start logstash
+4.3 Connect OpenSearch Dashboards
+Deploy OpenSearch Dashboards
+sh
+Copy
+Edit
+wget https://artifacts.opensearch.org/releases/bundle/opensearch-dashboards/2.10.0/opensearch-dashboards-2.10.0-linux-x64.tar.gz
+tar -xzf opensearch-dashboards-2.10.0-linux-x64.tar.gz
+cd opensearch-dashboards-2.10.0
+./opensearch-dashboards
+Configure Dashboards (opensearch_dashboards.yml)
+yaml
+Copy
+Edit
+server.host: "0.0.0.0"
+opensearch.hosts: ["http://<OpenSearch_IP>:9200"]
+Access OpenSearch Dashboards
+Open browser → http://<OpenSearch_IP>:5601
+Create an index pattern for logs (logs-*).
+Start analyzing log data.
 5. Optimization & Cost Savings
 Optimization	Impact
-Run Prometheus & Exporter on the same VM	Saves infrastructure cost
-Use batch processing in the exporter	Reduces API calls to Azure Storage
-Optimize scrape intervals	Reduces CPU/memory usage
+Use Fluent Bit instead of Logstash	Lower CPU & memory usage
+Enable log compression in OpenSearch	Reduces storage costs
+Store logs in hot/warm/cold tiers	Optimizes long-term storage
+Use Index Lifecycle Management (ILM)	Automatically deletes old logs
 6. Summary
-✅ Metrics extracted from Azure Storage (CSV/JSON)
-✅ Exporter converts them into Prometheus format
-✅ Prometheus stores metrics & Grafana visualizes them
-✅ Cost-optimized and scalable setup
-
-Would you like me to generate a full Ansible automation for deployment? 🚀
+✅ Logs extracted from Azure Storage
+✅ Ingested into OpenSearch via Fluent Bit or Logstash
+✅ Visualized in OpenSearch Dashboards
+✅ Cost-optimized with storage management
