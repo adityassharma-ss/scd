@@ -29,12 +29,16 @@ Configure prometheus.yml to scrape from the exporter:
 yaml
 Copy
 Edit
+
+```
 global:
   scrape_interval: 15s
 scrape_configs:
   - job_name: 'azure-exporter'
     static_configs:
       - targets: ['<Exporter_VM_IP>:8000']
+```
+
 Restart Prometheus
 sh
 Copy
