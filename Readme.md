@@ -56,29 +56,68 @@ For detailed pricing, refer to the [Azure Monitor pricing page](https://azure.mi
 
 For the most current pricing details, consult the [Azure Monitor pricing page](https://azure.microsoft.com/en-us/pricing/details/monitor/).
 
-## **4. Real-Time Monitoring with Azure Monitor and Grafana**
+### **3.3. Mathematical Cost Calculation**
 
-Achieving real-time monitoring involves understanding data latency and implementing best practices to minimize delays.
+#### **3.3.1. Data Ingestion Cost**
+
+**Formula:**  
+\[
+\text{Ingestion Cost} = D \times C_{\text{ingest}}
+\]
+where:  
+- \( D \) = Data ingested in GB per month  
+- \( C_{\text{ingest}} \) = Cost per GB (e.g., \$2.76/GB)
+
+#### **3.3.2. Data Retention Cost**
+
+**Formula:**  
+\[
+\text{Retention Cost} = D \times \left(\frac{R - 31}{30}\right) \times C_{\text{retain}}
+\]
+where:  
+- \( D \) = Data ingested in GB  
+- \( R \) = Total retention period in days  
+- \( C_{\text{retain}} \) = Cost per GB per additional 30 days (e.g., \$0.12)
+
+#### **3.3.3. API Call and Query Costs**
+
+**Formula:**  
+\[
+\text{Extra API Cost} = \left(\frac{A - A_{\text{free}}}{1000}\right) \times C_{\text{API}}
+\]
+where:  
+- \( A \) = Total API calls per month  
+- \( A_{\text{free}} \) = Free API calls (e.g., 1,000,000 calls)  
+- \( C_{\text{API}} \) = Cost per 1,000 API calls (e.g., \$0.01 per 1,000 calls)
+
+### **3.4. Sample Cost Calculation**
+
+Assuming:
+- **Data Ingestion**: 100 GB per month.
+- **Data Retention**: 90 days.
+- **API Calls**: 2,000,000 calls per month.
+
+Using given pricing, the estimated total monthly cost is **$309.64**.
+
+## **4. Real-Time Monitoring with Azure Monitor and Grafana**
 
 ### **4.1. Data Latency Considerations**
 
 - **Data Collection Interval**: Azure Monitor collects platform metrics typically every **one minute**.
-- **Processing Delay**: After collection, there's a short processing delay before metrics become available for querying, generally around **3 minutes**.
-- **Total Latency**: Considering collection and processing times, metrics are usually available for visualization in Grafana within **4 to 5 minutes** of the event occurring.
+- **Processing Delay**: Generally around **3 minutes**.
+- **Total Latency**: Metrics are available for visualization in **4 to 5 minutes**.
 
 ### **4.2. Best Practices for Minimizing Latency**
 
-- **Optimize Refresh Intervals**: Set Grafana's dashboard refresh intervals to balance the need for up-to-date information with potential API rate limits and data processing times.
-- **Monitor API Usage**: Regularly track API call volumes to ensure they remain within acceptable thresholds, preventing throttling and ensuring timely data updates.
-- **Efficient Data Export**: If exporting metrics to other services, ensure that export configurations are optimized to reduce additional latency.
-
-By understanding these factors and configuring both Azure Monitor and Grafana appropriately, organizations can achieve timely and efficient visualization of their Azure metrics.
+- **Optimize Refresh Intervals** to balance real-time updates and API limits.
+- **Monitor API Usage** to prevent throttling.
+- **Efficient Data Export** configurations to reduce additional latency.
 
 ## **5. Conclusion**
 
-Integrating Azure Monitor with Grafana provides a powerful platform for enterprise-level monitoring and visualization. By understanding API rate limits, associated costs, and implementing best practices for real-time monitoring, organizations can ensure a scalable, efficient, and cost-effective monitoring infrastructure.
+Integrating Azure Monitor with Grafana provides a powerful monitoring platform. By understanding API rate limits, associated costs, and implementing best practices, organizations can ensure a scalable, efficient, and cost-effective monitoring infrastructure.
 
-For a practical demonstration of deploying Azure Managed Grafana and integrating it with Azure Monitor, consider watching the following tutorial:
+For a practical demonstration, refer to:
 
 [Monitoring with Azure and Grafana - Daniel Lee](https://www.youtube.com/watch?v=GjDzwEcpC4o)
 
