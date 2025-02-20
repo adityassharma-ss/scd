@@ -1,0 +1,17 @@
+prometheus:
+  enabled: true
+  server:
+    extraArgs:
+      - --web.enable-remote-write-receiver
+      - --enable-feature=remote-write-receiver
+  prometheusSpec:
+    enableFeatures:
+      - remote-write-receiver
+    additionalFlags:
+      - --web.enable-remote-write-receiver
+      - --enable-feature=remote-write-receiver
+  remoteWrite:
+    - url: "http://loki-prometheus.server.grafana-loki.svc.cluster.local:80/api/v1/write"
+      name: "default"
+  service:
+    servicePort: 9090
