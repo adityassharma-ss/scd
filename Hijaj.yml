@@ -1,17 +1,34 @@
 prometheus:
-  enabled: true
-  server:
-    extraArgs:
-      - --web.enable-remote-write-receiver
-      - --enable-feature=remote-write-receiver
-  prometheusSpec:
-    enableFeatures:
-      - remote-write-receiver
-    additionalFlags:
-      - --web.enable-remote-write-receiver
-      - --enable-feature=remote-write-receiver
-  remoteWrite:
-    - url: "http://loki-prometheus.server.grafana-loki.svc.cluster.local:80/api/v1/write"
-      name: "default"
-  service:
-    servicePort: 9090
+  wal_directory: /tmp/grafana-agent/wal
+
+metrics:
+  global:
+    scrape_interval: 15s
+  configs:
+  - name: default
+    scrape_configs:
+      - job_name: 'faro-metrics'
+        scrape_interval: 5s
+        static_configs:
+          - targets: ['localhost:12347']
+    remote_write:
+      - url: http://prometheus:9090/api/v1/write
+
+logs:
+  configs:
+  - name: default
+    positions:
+      filename: /tmp/positions.yaml
+    scrape_configs:
+      - job_name: 'faro-logs'
+        static_configs:
+          - targets: [localhost]
+            labels:
+              job: 'faro-logs'
+              __path__: /tmp/grafana-agent/logs/*log
+    clients:
+      - url: http://loki:3100/loki/api/v1/push
+
+server:
+  log_level: debug
+  http_listen_port: 12345
