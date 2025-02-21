@@ -1,7 +1,41 @@
-global:
-  scrape_interval: 15s
+version: '3'
 
-scrape_configs:
-  - job_name: 'prometheus'
-    static_configs:
-      - targets: ['localhost:9090']
+services:
+  alloy:
+    image: grafana/agent:latest
+    volumes:
+      - ./alloy-config.yml:/etc/agent/config.yaml
+      - ./logs:/tmp/grafana-agent/logs
+    ports:
+      - "12347:12345"
+    command: ["run", "/etc/agent/config.yaml"]
+
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+
+  loki:
+    image: grafana/loki:latest
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+
+  grafana:
+    image: grafana/grafana-enterprise:latest
+    environment:
+      - GF_FEATURE_TOGGLES_ENABLE=flameGraph
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-storage:/var/lib/grafana
+    depends_on:
+      - prometheus
+      - loki
+
+volumes:
+  grafana-storage:
