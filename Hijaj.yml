@@ -1,34 +1,7 @@
-prometheus:
-  wal_directory: /tmp/grafana-agent/wal
+global:
+  scrape_interval: 15s
 
-metrics:
-  global:
-    scrape_interval: 15s
-  configs:
-  - name: default
-    scrape_configs:
-      - job_name: 'faro-metrics'
-        scrape_interval: 5s
-        static_configs:
-          - targets: ['localhost:12347']
-    remote_write:
-      - url: http://prometheus:9090/api/v1/write
-
-logs:
-  configs:
-  - name: default
-    positions:
-      filename: /tmp/positions.yaml
-    scrape_configs:
-      - job_name: 'faro-logs'
-        static_configs:
-          - targets: [localhost]
-            labels:
-              job: 'faro-logs'
-              __path__: /tmp/grafana-agent/logs/*log
-    clients:
-      - url: http://loki:3100/loki/api/v1/push
-
-server:
-  log_level: debug
-  http_listen_port: 12345
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
