@@ -1,41 +1,28 @@
-version: '3'
+server:
+  log_level: debug
+  http_listen_port: 12347
 
-services:
-  alloy:
-    image: grafana/agent:latest
-    volumes:
-      - ./alloy-config.yml:/etc/agent/config.yaml
-      - ./logs:/tmp/grafana-agent/logs
-    ports:
-      - "12347:12345"
-    command: ["run", "/etc/agent/config.yaml"]
+metrics:
+  configs:
+    - name: default
+      global:
+        scrape_interval: 15s
+      scrape_configs:
+        - job_name: 'faro-metrics'
+          static_configs:
+            - targets: ['host.docker.internal:12347']
+      remote_write:
+        - url: http://prometheus:9090/api/v1/write
 
-  prometheus:
-    image: prom/prometheus:latest
-    volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml
-    ports:
-      - "9090:9090"
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-
-  loki:
-    image: grafana/loki:latest
-    ports:
-      - "3100:3100"
-    command: -config.file=/etc/loki/local-config.yaml
-
-  grafana:
-    image: grafana/grafana-enterprise:latest
-    environment:
-      - GF_FEATURE_TOGGLES_ENABLE=flameGraph
-    ports:
-      - "3000:3000"
-    volumes:
-      - grafana-storage:/var/lib/grafana
-    depends_on:
-      - prometheus
-      - loki
-
-volumes:
-  grafana-storage:
+logs:
+  configs:
+    - name: default
+      scrape_configs:
+        - job_name: faro-logs
+          static_configs:
+            - targets: [host.docker.internal]
+              labels:
+                job: faro-logs
+                __path__: /var/log/faro/*.log
+      clients:
+        - url: http://loki:3100/loki/api/v1/push
