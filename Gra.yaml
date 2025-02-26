@@ -1,0 +1,12 @@
+apiVersion: 1
+datasources:
+  - name: "Your MySQL Data Source"
+    type: mysql
+    url: AWSWCGNVAL0005.jx2.com:3306
+    database: your_database_name
+    user: jnjscom_readonly
+    secureJsonData:
+      password: "your-correct-password"
+    editable: false  # Set to true if you want to edit via UI later
+    uid: mysql_main  # Use a unique identifier
+    version: 1
